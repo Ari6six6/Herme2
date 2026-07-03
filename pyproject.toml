@@ -1,0 +1,25 @@
+[project]
+name = "hermes-agent"
+version = "0.1.0"
+description = "Hermes: a package-per-prompt agent shell for Termux, driving Hermes-4.3-36B on rented Vast.ai GPUs"
+requires-python = ">=3.10"
+dependencies = [
+    "httpx>=0.27",
+    "prompt_toolkit>=3.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0"]
+
+[project.scripts]
+hermes = "hermes.cli:main"
+
+[build-system]
+requires = ["setuptools>=65"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["hermes*"]
+
+[tool.setuptools.package-data]
+hermes = ["prompts/*.md", "toolbox/*.py"]
