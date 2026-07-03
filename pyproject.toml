@@ -22,4 +22,4 @@ build-backend = "setuptools.build_meta"
 include = ["hermes*"]
 
 [tool.setuptools.package-data]
-hermes = ["prompts/*.md", "toolbox/*.py"]
+hermes = ["prompts/*.md", "toolbox/*.py", "personas/*.md"]

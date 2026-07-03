@@ -86,7 +86,8 @@ def runtime_status_text(env: dict) -> str:
     )
 
 
-def build_system_prompt(project: Project, env: dict, cfg: Config | None = None) -> str:
+def build_system_prompt(project: Project, env: dict, cfg: Config | None = None,
+                        persona=None) -> str:
     from hermes.tools import toolbox_catalog
 
     template = _template("system.md")
@@ -130,13 +131,23 @@ def build_system_prompt(project: Project, env: dict, cfg: Config | None = None) 
         # Model-specific tool-calling discipline. Empty for the baseline model,
         # so its system prompt is byte-for-byte what it always was.
         system += "\n\n## Operating notes for this model\n\n" + guidance
-    persona = read_persona().strip()
-    if persona:
-        system += "\n\n## Persona\n\n" + persona
+    # Personas (feature 9): a named persona replaces the single global voice;
+    # without one, the legacy ~/.hermes/persona.md rides exactly as before.
+    if persona is not None:
+        system += (
+            f"\n\n## Persona — {persona.name}\n\n{persona.voice}\n\n"
+            "You are currently operating as this persona: keep its voice and "
+            "stay inside its capacity, but the rules above always win."
+        )
+    else:
+        legacy = read_persona().strip()
+        if legacy:
+            system += "\n\n## Persona\n\n" + legacy
     return system
 
 
-def assemble(project: Project, prompt: str, env: dict, cfg: Config) -> list[dict]:
+def assemble(project: Project, prompt: str, env: dict, cfg: Config,
+             persona=None) -> list[dict]:
     """Build the two-message package. `env` carries gpu_status,
     remote_workspace and context_window (0 if unknown)."""
     total_chars = package_budget_chars(cfg, env.get("context_window") or 0)
@@ -211,7 +222,8 @@ def assemble(project: Project, prompt: str, env: dict, cfg: Config) -> list[dict
     user = "\n\n".join(sections)
 
     return [
-        {"role": "system", "content": build_system_prompt(project, env, cfg)},
+        {"role": "system",
+         "content": build_system_prompt(project, env, cfg, persona=persona)},
         {"role": "user", "content": user},
     ]
 

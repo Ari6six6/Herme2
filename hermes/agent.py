@@ -103,10 +103,12 @@ def _normalize(text: str) -> str:
 
 
 def run(project, prompt, cfg, backend, gpu=None, env=None, confirm_fn=None,
-        sandbox=None):
+        sandbox=None, persona=None):
     """Execute one agent run. `env` carries gpu_status / remote_workspace /
     context_window for the package; `gpu` is an SSHEndpoint or None; `sandbox` is
-    the VPS sandbox-host SSHEndpoint or None."""
+    the VPS sandbox-host SSHEndpoint or None; `persona` (feature 9) makes the run
+    speak and act as a named persona — its voice in the system prompt, its tool
+    allowlist narrowing the registry, its turn cap tightening the loop."""
     if confirm_fn is None:
         from hermes.confirm import confirm as confirm_fn
 
@@ -133,12 +135,17 @@ def run(project, prompt, cfg, backend, gpu=None, env=None, confirm_fn=None,
             print(magenta("  (reconciled standing instructions → directives.md)"))
             log({"role": "directives", "content": project.read_directives()})
 
-    messages = package.assemble(project, prompt, env, cfg)
+    messages = package.assemble(project, prompt, env, cfg, persona=persona)
     project.append_history(run_id, prompt)
+    if persona is not None:
+        log({"role": "persona", "content": persona.name})
     for m in messages:
         log({"role": m["role"], "content": m["content"][:200000]})
 
     registry = build_registry(project, cfg, confirm_fn)
+    if persona is not None:
+        from hermes import personas as personas_mod
+        registry = personas_mod.filter_registry(registry, persona)
     ctx = ToolContext(
         project=project,
         cfg=cfg,
@@ -155,6 +162,8 @@ def run(project, prompt, cfg, backend, gpu=None, env=None, confirm_fn=None,
     ctx._delegate_log = log  # child steps land in the same transcript
 
     max_turns = cfg.get("max_turns", 20)
+    if persona is not None and persona.max_turns:
+        max_turns = max(1, min(max_turns, persona.max_turns))
     nudges_left = cfg.get("stall_nudges", 2)
     phantom_nudges_left = cfg.get("phantom_nudges", 1)
     # Verification enforcement (feature 7): a one-shot nudge when a file-mutating

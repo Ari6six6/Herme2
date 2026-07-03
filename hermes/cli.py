@@ -164,7 +164,35 @@ def cmd_run(cfg, args: str) -> None:
     }
     prompt = args.strip()
     backend = make_backend(cfg)
-    agent.run(project, prompt, cfg, backend, gpu=gpu, env=env, sandbox=sandbox)
+    persona, prompt = _pick_persona(cfg, project, prompt, backend, spec)
+    agent.run(project, prompt, cfg, backend, gpu=gpu, env=env, sandbox=sandbox,
+              persona=persona)
+
+
+def _pick_persona(cfg, project, prompt, backend, spec):
+    """Who speaks this run (feature 9). Precedence: explicit `hey <name>` /
+    `@<name>` > the persona_default. A typo'd name never eats the
+    prompt — the whole text runs as the default agent, with a hint."""
+    if not cfg.get("personas_enabled", False):
+        return None, prompt
+    from hermes import personas as personas_mod
+    max_chars = cfg.get("persona_max_chars", 2000)
+    catalog = personas_mod.load_all(project, max_chars)
+    persona, prompt, attempted = personas_mod.parse_invocation(prompt, catalog)
+    if persona is not None:
+        print(dim(f"(speaking as {persona.name})"))
+        return persona, prompt
+    if attempted:
+        print(dim(f"(no persona named '{attempted}' — running as default; "
+                  "`personas` lists the cast)"))
+        return None, prompt
+    default = (cfg.get("persona_default") or "").strip()
+    if default:
+        persona = personas_mod.resolve(catalog, default)
+        if persona is not None:
+            return persona, prompt
+        print(yellow(f"persona_default '{default}' not found — running as default"))
+    return None, prompt
 
 
 def cmd_project(cfg, args: str) -> None:
@@ -599,6 +627,71 @@ def cmd_skills(cfg, args: str) -> None:
                          "or `skills edit <name>`)"))
 
 
+def cmd_personas(cfg, args: str) -> None:
+    """The cast of named archetypes (feature 9).
+      personas               list the roster (builtin + global + this project)
+      personas show <name>   print a persona's full file
+      personas edit <name>   $EDITOR it (a new name scaffolds a global file)
+      personas use <name>    adopt one as the default voice · `use off` clears
+    """
+    from hermes import personas as personas_mod
+    project = _current_project(cfg)
+    max_chars = cfg.get("persona_max_chars", 2000)
+    catalog = personas_mod.load_all(project, max_chars)
+    parts = args.split(maxsplit=1)
+    sub = parts[0] if parts else "list"
+    name = parts[1].strip() if len(parts) > 1 else ""
+    if sub == "show" and name:
+        p = personas_mod.resolve(catalog, name)
+        if p is None:
+            print(red(f"no such persona: {name}"))
+        else:
+            print(p.path.read_text().rstrip() if p.path else p.voice)
+    elif sub == "edit" and name:
+        p = personas_mod.resolve(catalog, name)
+        if p is not None and p.scope != "builtin":
+            _edit_file(p.path)
+            return
+        if not personas_mod.PERSONA_NAME_RE.match(name):
+            print(red("persona name must match [A-Za-z0-9_-]{1,40}"))
+            return
+        # A new name — or shadowing a shipped builtin — edits a global file.
+        personas_mod.global_dir().mkdir(parents=True, exist_ok=True)
+        path = personas_mod.global_dir() / f"{name}.md"
+        if not path.exists():
+            seed = p.path.read_text() if p is not None and p.path else (
+                f"one-line capacity of {name}\n"
+                "tools: read_file, list_files, write_note\n\n"
+                f"You are {name}. (the voice)\n"
+            )
+            path.write_text(seed)
+        _edit_file(path)
+    elif sub == "use" and name:
+        if name.lower() in ("off", "none", ""):
+            cfg.set("persona_default", "")
+            cfg.save()
+            print(green("default persona cleared") + dim(" — back to ~/.hermes/persona.md"))
+            return
+        p = personas_mod.resolve(catalog, name)
+        if p is None:
+            print(red(f"no such persona: {name}"))
+            return
+        cfg.set("persona_default", p.name)
+        cfg.save()
+        print(green(f"default persona: {p.name}"))
+    else:
+        if not cfg.get("personas_enabled", False):
+            print(yellow("personas are off") + dim(" — `config set personas_enabled true`"))
+        default = (cfg.get("persona_default") or "").strip()
+        for n in sorted(catalog):
+            p = catalog[n]
+            tag = "" if p.scope == "builtin" else f" [{p.scope}]"
+            mark = green("* ") if n == default else "  "
+            print(f"{mark}{cyan(n)}{dim(tag)} — {p.description[:100]}")
+        if not catalog:
+            print(dim("(no personas — the shipped cast seems missing)"))
+
+
 def cmd_checkpoint(cfg, args: str) -> None:
     """Project snapshots taken before file-mutating turns (feature 6).
       checkpoint(s)              list snapshots (newest last)
@@ -702,6 +795,7 @@ HELP = f"""\
 {cyan('notes')} / {cyan('history')} [n] / {cyan('summaries')} [n]
 {cyan('directives')} [edit|reconcile]  standing instructions distilled from history
 {cyan('skills')} [show|edit <name>]  the agent's reusable how-to notes
+{cyan('personas')} [show|edit|use <name>]  the cast of archetypes ({cyan('run hey <name>, ...')} invokes one)
 {cyan('checkpoint')} [restore <id>]  project snapshots before file-mutating turns
 {cyan('tools')}                 list the agent's tools
 {cyan('gpu')} attach [sshstr] | serve | status | tunnel | down   {dim('(alias: g)')}
@@ -741,6 +835,8 @@ def dispatch(cfg, line: str) -> bool:
         cmd_directives(cfg, rest)
     elif cmd == "skills":
         cmd_skills(cfg, rest)
+    elif cmd == "personas":
+        cmd_personas(cfg, rest)
     elif cmd == "debug":
         cmd_debug(cfg, rest)
     elif cmd in ("checkpoint", "checkpoints"):

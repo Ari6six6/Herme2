@@ -55,6 +55,19 @@ DEFAULTS: dict = {
     "delegate_enabled": False,
     "delegate_max_turns": 20,  # child turn cap (lower than the parent's by default)
     "delegate_max_depth": 1,  # 1 = children don't spawn grandchildren
+    # Personas (feature 9): a cast of named archetypes, each a voice + capacity
+    # + tool allowlist. Catalog mirrors skills (builtin/global/project markdown);
+    # `hey <name>, ...` invokes one explicitly, routing picks one automatically.
+    "personas_enabled": False,  # load the catalog; enables hey-<name> + delegate persona=
+    "personas_route": False,  # dynamic routing: one cheap dispatcher call picks the persona
+    "persona_default": "",  # persona adopted when none is named ("" = legacy ~/.hermes/persona.md)
+    "persona_max_chars": 2000,  # voice truncation, same budget as read_persona
+    # Council (feature 10): personas deliberating in a closed round-robin loop,
+    # bounded by rounds and a wall clock, ending in a written outcome.
+    "council_enabled": False,
+    "council_rounds": 2,  # full round-robin passes over the cast
+    "council_max_seconds": 600,  # wall-clock cap; on expiry, jump straight to the scribe
+    "council_transcript_chars": 24000,  # rolling transcript budget fed to each speaker
     # Prefix-cache-friendly package ordering (feature 5): move volatile runtime
     # status (date, GPU, hosts) out of the stable header so the header + persona
     # + tools + skills index stay a byte-identical prefix for vLLM prefix caching.

@@ -64,6 +64,10 @@ class Project:
         return self.root / "skills"
 
     @property
+    def personas_dir(self) -> Path:
+        return self.root / "personas"
+
+    @property
     def runs_dir(self) -> Path:
         return self.root / "runs"
 
