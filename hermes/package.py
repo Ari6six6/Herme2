@@ -261,6 +261,14 @@ def router_prompt() -> str:
     return _template("router.md")
 
 
+def council_member_prompt() -> str:
+    return _template("council_member.md")
+
+
+def council_scribe_prompt() -> str:
+    return _template("council_scribe.md")
+
+
 def verify_before_done_nudge() -> str:
     return _template("verify_before_done.md").strip()
 

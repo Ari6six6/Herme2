@@ -251,6 +251,84 @@ There is no flag. It's a safety boundary, so it's always active. It only ever
 prompts you when untrusted content is actually in scope; a run that never fetches
 anything never sees it. `finish_run` is exempt (ending a run isn't an action).
 
+### Feature 9 — Personas (the cast of archetypes)
+
+One agent, many voices. A **persona** is a named archetype — a distinct voice
+*plus* a distinct capacity — kept as one markdown file: the first non-empty line
+is the capacity one-liner, optional `tools:` / `aliases:` / `max_turns:` header
+lines follow, and the rest is the voice. Three scopes, most specific wins:
+builtin (shipped with Hermes) < global (`~/.hermes/personas/`) < project
+(`<project>/personas/`). Shadow a shipped persona by creating a file of the same
+name in a more specific scope.
+
+The shipped starter cast: **owl** (the analyst — dissects, audits, weighs;
+read-and-observe tools only), **smith** (the builder — writes, runs, verifies;
+full tool set), **scout** (the researcher — web-first, cites sources), and
+**scribe** (the editor — documents and summaries; files only, no shell, no net).
+
+Three ways a persona takes a run:
+
+1. **By name** — `run hey owl, why is the tunnel flapping?` (or `run @owl ...`).
+   Free — pure string parsing. A typo'd name never eats your prompt; the whole
+   text runs as the default agent, with a hint.
+2. **By routing** (`personas_route`) — you talk normally, one cheap dispatcher
+   call reads the roster of capacity one-liners and picks the expert (or `none`).
+   It fails *open*: any router failure runs the default agent, and the console
+   prints who caught the run so you can override with `hey <name>`.
+3. **As the default** — `personas use owl` makes one persona the standing voice.
+
+A persona changes three things about a run: its voice replaces the `## Persona`
+block in the system prompt, its `tools:` line **narrows** the registry (it can
+only remove tools, never add; `finish_run` always survives), and its `max_turns`
+tightens the loop. With delegation also on, the parent's prompt carries the cast
+roster and `delegate` accepts a `persona` name — the model itself can spawn a
+child *as* the owl or the scout, with that persona's tool posture by default.
+
+| Flag | Default | Effect |
+|---|---|---|
+| `personas_enabled` | `false` | load the catalog; enables `hey <name>` + `delegate persona=` |
+| `personas_route` | `false` | dynamic routing: one dispatcher call picks the persona |
+| `persona_default` | `""` | persona adopted when none is named (`""` = legacy `persona.md`) |
+| `persona_max_chars` | `2000` | voice truncation — same budget the legacy persona always had |
+
+Safety: a persona's tool list is a scoping convenience, **not** a security
+boundary. It only ever narrows a registry that was built with the normal gates;
+confirm prompts, host tiers and the taint rail are untouched, and a persona
+child can never reach a tool its parent couldn't. Cost: a voice is capped at the
+same ~500 tokens the legacy persona always cost, so seam A is net-zero; the
+roster block (~30–40 tokens per persona) appears only when personas *and*
+delegation are both on; the router rides in a separate completion, so the run
+package pays nothing for routing. Note for prefix-cache users: each persona is
+its own stable prefix — alternating personas lowers the hit rate (it doesn't
+corrupt anything); `persona_default` gives a stable single-persona setup.
+
+### Feature 10 — Council (the cast deliberates)
+
+`council <topic>` convenes the personas in a closed circle: strict round-robin,
+each speaking slot one completion (voice + roster + rules, then the topic and
+the transcript so far), **no tools** — a council deliberates, it doesn't act.
+Two bounds run the clock: `council_rounds` full passes, and a wall clock checked
+before every slot. However it ends — rounds done, clock expired, backend down,
+Ctrl-C — the **scribe** always writes the outcome from whatever transcript
+exists: agreements, disagreements (with who held them), a recommendation, open
+questions. Both files land in `<project>/council/` (`NNNN-<slug>.md` +
+`NNNN-<slug>.transcript.md`); the council never touches `workspace/`.
+
+```
+council should we rewrite the parser or patch it?
+council pick a storage format owl,smith        # explicit members
+```
+
+| Flag | Default | Effect |
+|---|---|---|
+| `council_enabled` | `false` | enable the `council` command |
+| `council_rounds` | `2` | full round-robin passes over the cast |
+| `council_max_seconds` | `600` | wall clock; on expiry, straight to the scribe |
+| `council_transcript_chars` | `24000` | rolling transcript budget fed to each speaker |
+
+Cost scales as members × rounds completions plus one scribe call — with the
+default cast and rounds that's 9 calls, so mind the clock on slow boxes.
+
 ## Static package budget (measured, 60K box)
 
 Keep an eye on the fixed block — it's sent on every single call:
@@ -301,5 +379,7 @@ what it was before. Nothing here changes on-disk formats without silent migratio
 |---|---|
 | `directives [edit\|reconcile]` | show / nano / rebuild the distilled standing instructions |
 | `skills [show\|edit <name>]` | list / read / nano the agent's how-to notes |
+| `personas [show\|edit\|use <name>]` | list the cast / read / nano / set the default voice |
+| `council <topic> [names]` | convene the cast on a topic; the scribe writes the outcome |
 | `checkpoint [restore <id>]` | list project snapshots / revert to one |
 | `debug prefix` | measure the byte prefix two consecutive packages share |

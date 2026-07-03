@@ -700,6 +700,56 @@ def cmd_personas(cfg, args: str) -> None:
             print(dim("(no personas — the shipped cast seems missing)"))
 
 
+def cmd_council(cfg, args: str) -> None:
+    """Council mode (feature 10): the cast deliberates, the scribe writes.
+      council <topic>              the loaded cast (up to 4) takes the topic
+      council <topic> owl,smith    explicit members — comma-separated last word
+    """
+    if not cfg.get("council_enabled", False):
+        print(yellow("council is off") + dim(" — `config set council_enabled true`"))
+        return
+    project = _current_project(cfg)
+    if project is None:
+        print(yellow("no current project") + dim(" — `project new <name>` or `project use <name>`"))
+        return
+    args = args.strip()
+    if not args:
+        print(dim("usage: council <topic> [names,comma,separated]"))
+        return
+    from hermes import personas as personas_mod
+    catalog = personas_mod.load_all(project, cfg.get("persona_max_chars", 2000))
+    if not catalog:
+        print(red("no personas to convene") + dim(" — the shipped cast seems missing"))
+        return
+    topic, members = args, None
+    head, _, last = args.rpartition(" ")
+    if head and "," in last:
+        picks = [personas_mod.resolve(catalog, n)
+                 for n in last.split(",") if n.strip()]
+        if picks and all(p is not None for p in picks):
+            topic = head.strip()
+            members = list(dict.fromkeys(picks))  # dedupe, keep order
+    if members is None:
+        members = [catalog[n] for n in sorted(catalog)][:4]
+    if cfg.get("backend") != "mock":
+        state = load_gpu_state()
+        if state.get("host"):
+            _ensure_tunnel(cfg, state)
+        if not _probe_vllm(cfg):
+            print(red("vLLM endpoint not reachable") + dim(" — `gpu attach` + `gpu serve` first "
+                  "(or `config set backend mock` for a dry run)."))
+            return
+    from hermes.models import resolve
+    spec = resolve(cfg)
+    think_re = agent._think_re(spec.think_tags)
+    backend = make_backend(cfg)
+    from hermes import council as council_mod
+    print(dim(f"convening: {', '.join(p.name for p in members)} — "
+              f"{cfg.get('council_rounds', 2)} round(s), "
+              f"{cfg.get('council_max_seconds', 600)}s clock"))
+    council_mod.council(project, topic, members, cfg, backend, think_re)
+
+
 def cmd_checkpoint(cfg, args: str) -> None:
     """Project snapshots taken before file-mutating turns (feature 6).
       checkpoint(s)              list snapshots (newest last)
@@ -804,6 +854,7 @@ HELP = f"""\
 {cyan('directives')} [edit|reconcile]  standing instructions distilled from history
 {cyan('skills')} [show|edit <name>]  the agent's reusable how-to notes
 {cyan('personas')} [show|edit|use <name>]  the cast of archetypes ({cyan('run hey <name>, ...')} invokes one)
+{cyan('council')} <topic> [names]  the cast deliberates in a clocked circle; the scribe writes the outcome
 {cyan('checkpoint')} [restore <id>]  project snapshots before file-mutating turns
 {cyan('tools')}                 list the agent's tools
 {cyan('gpu')} attach [sshstr] | serve | status | tunnel | down   {dim('(alias: g)')}
@@ -845,6 +896,8 @@ def dispatch(cfg, line: str) -> bool:
         cmd_skills(cfg, rest)
     elif cmd == "personas":
         cmd_personas(cfg, rest)
+    elif cmd == "council":
+        cmd_council(cfg, rest)
     elif cmd == "debug":
         cmd_debug(cfg, rest)
     elif cmd in ("checkpoint", "checkpoints"):
