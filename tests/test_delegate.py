@@ -116,6 +116,135 @@ def test_delegate_disabled_returns_error(project, cfg):
     assert "delegate" not in reg.names()
 
 
+# ---- persona children (feature 9, seam B) ------------------------------------
+class RecordingBackend(ScriptBackend):
+    """ScriptBackend that also keeps the system prompt it was shown."""
+
+    def __init__(self, turns):
+        super().__init__(turns)
+        self.systems = []
+
+    def chat(self, messages, tools=None, tool_choice=None):
+        self.systems.append(messages[0]["content"])
+        return super().chat(messages, tools=tools, tool_choice=tool_choice)
+
+
+def _persona(project, cfg, name="owl"):
+    from hermes import personas as personas_mod
+    cfg.set("personas_enabled", True)
+    return personas_mod.get(project, name)
+
+
+def test_persona_child_prompt_appends_voice_after_subagent_header(project, cfg):
+    # The overlay must APPEND: the "You are a SUB-AGENT" first line is the
+    # contract by which callers (and this file) recognize a child.
+    backend = RecordingBackend([_call("finish_run", {"summary": "done"})])
+    ctx = _parent_ctx(project, cfg, backend)
+    subagent.run_child(ctx, "audit it", [], cfg, persona=_persona(project, cfg))
+    system = backend.systems[0]
+    assert system.startswith("You are a SUB-AGENT")
+    assert "## Persona — owl" in system
+    assert "You are the Owl" in system
+
+
+def test_persona_child_defaults_to_persona_tools(project, cfg):
+    backend = RecordingBackend([_call("finish_run", {"summary": "done"})])
+    ctx = _parent_ctx(project, cfg, backend)
+    p = _persona(project, cfg, "scribe")  # files only — no shell, no net
+    subagent.run_child(ctx, "tidy notes", [], cfg, persona=p)
+    tools_line = backend.systems[0].splitlines()
+    listed = next(l for l in tools_line if l.startswith("Your tools this run:"))
+    assert "write_file" in listed
+    assert "local_shell" not in listed
+    assert "http_request" not in listed
+
+
+def test_explicit_allowed_tools_beat_persona_posture(project, cfg):
+    backend = RecordingBackend([_call("finish_run", {"summary": "done"})])
+    ctx = _parent_ctx(project, cfg, backend)
+    p = _persona(project, cfg, "scribe")
+    subagent.run_child(ctx, "x", ["write_note"], cfg, persona=p)
+    listed = next(l for l in backend.systems[0].splitlines()
+                  if l.startswith("Your tools this run:"))
+    assert "write_note" in listed
+    assert "write_file" not in listed  # the caller's narrower set won
+
+
+def test_persona_max_turns_tightens_child_cap(project, cfg):
+    p = _persona(project, cfg, "owl")
+    assert p.max_turns == 14
+    cfg.set("delegate_max_turns", 2)  # the smaller of the two must win
+    backend = ScriptBackend([
+        _call("write_note", {"text": "1"}),
+        _call("write_note", {"text": "2"}),
+        _call("write_note", {"text": "3"}),
+    ])
+    ctx = _parent_ctx(project, cfg, backend)
+    out = subagent.run_child(ctx, "endless", ["write_note"], cfg, persona=p)
+    assert "[sub-agent stopped: turn cap reached]" in out
+    assert "Turn cap: 2." in out
+
+
+def test_delegate_tool_spawns_persona_child(project, cfg):
+    cfg.set("personas_enabled", True)
+    backend = RecordingBackend([
+        _call("finish_run", {"summary": "the owl concludes"}),
+    ])
+    ctx = _parent_ctx(project, cfg, backend)
+    out = ctx.registry.dispatch("delegate", json.dumps(
+        {"brief": "audit the parser", "persona": "owl"}), ctx)
+    assert out == "the owl concludes"
+    assert "## Persona — owl" in backend.systems[0]
+
+
+def test_delegate_unknown_persona_is_an_error_string(project, cfg):
+    cfg.set("personas_enabled", True)
+    ctx = _parent_ctx(project, cfg, ScriptBackend([]))
+    out = ctx.registry.dispatch("delegate", json.dumps(
+        {"brief": "x", "persona": "minotaur"}), ctx)
+    assert out.startswith("ERROR: no such persona 'minotaur'")
+    assert "owl" in out  # the roster is named so the model can self-correct
+
+
+def test_delegate_persona_requires_personas_enabled(project, cfg):
+    ctx = _parent_ctx(project, cfg, ScriptBackend([]))  # delegate on, personas off
+    out = ctx.registry.dispatch("delegate", json.dumps(
+        {"brief": "x", "persona": "owl"}), ctx)
+    assert out.startswith("ERROR: personas are disabled")
+
+
+def test_persona_child_gated_tool_still_asks_operator(project, cfg):
+    # The taint/confirm rail is untouched by personas: a DENY inside a persona
+    # child must be honoured exactly as in a plain child.
+    calls = {"n": 0}
+
+    def deny(*a, **k):
+        calls["n"] += 1
+        return False
+
+    backend = ScriptBackend([
+        _call("local_shell", {"command": "echo hi"}),
+        _call("finish_run", {"summary": "blocked"}),
+    ])
+    ctx = _parent_ctx(project, cfg, backend, confirm=deny)
+    p = _persona(project, cfg, "owl")  # owl's posture includes local_shell
+    out = subagent.run_child(ctx, "observe", [], cfg, persona=p)
+    assert calls["n"] == 1
+    assert out == "blocked"
+
+
+def test_roster_block_only_when_both_toggles_on(project, cfg):
+    from hermes import package
+    base = package.build_system_prompt(project, {}, cfg)
+    assert "## Personas — a cast you can delegate to" not in base
+    cfg.set("personas_enabled", True)
+    assert "## Personas" not in package.build_system_prompt(project, {}, cfg)
+    cfg.set("delegate_enabled", True)
+    system = package.build_system_prompt(project, {}, cfg)
+    assert "## Personas — a cast you can delegate to" in system
+    assert "`owl`" in system and "`smith`" in system
+
+
 # ---- end to end: parent context grows by only brief + summary ----------------
 class ParentWithDelegate:
     """Parent delegates once, then finishes. The child's own turns are served by

@@ -126,6 +126,19 @@ def build_system_prompt(project: Project, env: dict, cfg: Config | None = None,
                 "gotchas. After a task that took real figuring-out, capture what you "
                 "learned with `write_skill` (or update an existing skill).\n\n" + idx
             )
+    # Personas roster (feature 9): the delegate-facing cast list, so the model
+    # itself can spawn a child AS a named expert. Only when both systems are on.
+    if (cfg is not None and cfg.get("personas_enabled", False)
+            and cfg.get("delegate_enabled", False)):
+        from hermes import personas as personas_mod
+        roster = personas_mod.index(project)
+        if roster:
+            system += (
+                "\n\n## Personas — a cast you can delegate to\n\n"
+                "Each line is a named expert. `delegate` accepts a `persona` "
+                "name: the child speaks and works as that persona, with its "
+                "tool posture by default.\n\n" + roster
+            )
     guidance = (env.get("model_tool_guidance") or "").strip()
     if guidance:
         # Model-specific tool-calling discipline. Empty for the baseline model,

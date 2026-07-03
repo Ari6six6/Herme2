@@ -19,7 +19,9 @@ from hermes.tools.base import obj_schema, tool
     "intermediate work never touches your context. Use this to keep big, "
     "spammy sub-tasks (wide searches, multi-file surveys) out of your window. "
     "The child can never do more than you can, and gated tools still ask the "
-    "operator.",
+    "operator. When personas are on you may spawn the child AS a named persona "
+    "from the roster: it works in that voice and capacity, with that persona's "
+    "tool posture unless you name `allowed_tools` yourself.",
     obj_schema(
         {
             "brief": {"type": "string",
@@ -27,6 +29,11 @@ from hermes.tools.base import obj_schema, tool
             "allowed_tools": {
                 "type": "array", "items": {"type": "string"},
                 "description": "tool names the child may use (a subset of yours)",
+            },
+            "persona": {
+                "type": "string",
+                "description": "optional: a persona name from the roster the "
+                               "child runs as",
             },
         },
         ["brief"],
@@ -43,9 +50,22 @@ def delegate(args, ctx):
     brief = str(args.get("brief") or "").strip()
     if not brief:
         return "ERROR: delegate needs a `brief`."
+    persona = None
+    pname = str(args.get("persona") or "").strip()
+    if pname:
+        if not ctx.cfg.get("personas_enabled", False):
+            return ("ERROR: personas are disabled "
+                    "(config set personas_enabled true).")
+        from hermes import personas as personas_mod
+        max_chars = ctx.cfg.get("persona_max_chars", 2000)
+        catalog = personas_mod.load_all(ctx.project, max_chars)
+        persona = personas_mod.resolve(catalog, pname)
+        if persona is None:
+            return (f"ERROR: no such persona '{pname}'. "
+                    f"Available: {', '.join(sorted(catalog))}")
     log = getattr(ctx, "_delegate_log", None)
     return subagent.run_child(ctx, brief, args.get("allowed_tools") or [], ctx.cfg,
-                              log=log)
+                              log=log, persona=persona)
 
 
 TOOLS = [delegate]

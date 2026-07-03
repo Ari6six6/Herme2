@@ -53,8 +53,11 @@ def _cap_out(last_text, tool_names, max_turns, reason) -> str:
 
 
 def run_child(parent_ctx: ToolContext, brief: str, allowed_tools, cfg,
-              log=None) -> str:
-    """Run one delegated child loop and return its single conclusion string."""
+              log=None, persona=None) -> str:
+    """Run one delegated child loop and return its single conclusion string.
+    With `persona` (feature 9) the child speaks and works as that persona: its
+    voice rides after the subagent prompt, its tool posture is the default
+    allowed set, and its turn cap tightens the child's own."""
     from hermes.agent import _assistant_msg, strip_think
 
     backend = parent_ctx.backend
@@ -64,6 +67,11 @@ def run_child(parent_ctx: ToolContext, brief: str, allowed_tools, cfg,
     depth = (parent_ctx.depth or 0) + 1
     max_depth = int(cfg.get("delegate_max_depth", 1))
     max_turns = max(1, int(cfg.get("delegate_max_turns", 20)))
+    if persona is not None:
+        if not allowed_tools:
+            allowed_tools = list(persona.tools or [])
+        if persona.max_turns:
+            max_turns = max(1, min(max_turns, persona.max_turns))
 
     child_reg = _child_registry(parent_ctx, allowed_tools, depth, max_depth, cfg)
     child_ctx = ToolContext(
@@ -77,10 +85,20 @@ def run_child(parent_ctx: ToolContext, brief: str, allowed_tools, cfg,
 
     tool_list = ", ".join(child_reg.names())
     system = package.render(package.subagent_prompt(), {"tools": tool_list})
+    if persona is not None:
+        # APPENDED after the subagent prompt, never prepended — the child is
+        # still a sub-agent first (and callers key on that prompt's first line).
+        system += (
+            f"\n\n## Persona — {persona.name}\n\n{persona.voice}\n\n"
+            "Work the brief as this persona: its voice, its capacity. The "
+            "sub-agent rules above still apply."
+        )
     msgs = [{"role": "system", "content": system},
             {"role": "user", "content": brief.strip()}]
     if log:
-        log({"role": "delegate", "content": f"depth={depth} tools=[{tool_list}]\n{brief[:500]}"})
+        who = f" persona={persona.name}" if persona is not None else ""
+        log({"role": "delegate",
+             "content": f"depth={depth}{who} tools=[{tool_list}]\n{brief[:500]}"})
 
     tool_names: list[str] = []
     last_text = ""
