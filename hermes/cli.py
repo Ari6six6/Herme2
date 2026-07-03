@@ -171,8 +171,9 @@ def cmd_run(cfg, args: str) -> None:
 
 def _pick_persona(cfg, project, prompt, backend, spec):
     """Who speaks this run (feature 9). Precedence: explicit `hey <name>` /
-    `@<name>` > the persona_default. A typo'd name never eats the
-    prompt — the whole text runs as the default agent, with a hint."""
+    `@<name>` > dynamic routing > the persona_default. A typo'd name never
+    eats the prompt, and a failed router never blocks the run — both fall
+    back to the default agent."""
     if not cfg.get("personas_enabled", False):
         return None, prompt
     from hermes import personas as personas_mod
@@ -186,6 +187,13 @@ def _pick_persona(cfg, project, prompt, backend, spec):
         print(dim(f"(no persona named '{attempted}' — running as default; "
                   "`personas` lists the cast)"))
         return None, prompt
+    if cfg.get("personas_route", False):
+        think_re = agent._think_re(spec.think_tags)
+        persona = personas_mod.route(prompt, catalog, backend, cfg, think_re)
+        if persona is not None:
+            print(dim(f"(routed to {persona.name} — say `hey <name>` to pick "
+                      "yourself)"))
+            return persona, prompt
     default = (cfg.get("persona_default") or "").strip()
     if default:
         persona = personas_mod.resolve(catalog, default)

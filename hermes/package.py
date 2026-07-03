@@ -244,6 +244,10 @@ def subagent_prompt() -> str:
     return _template("subagent.md")
 
 
+def router_prompt() -> str:
+    return _template("router.md")
+
+
 def verify_before_done_nudge() -> str:
     return _template("verify_before_done.md").strip()
 
