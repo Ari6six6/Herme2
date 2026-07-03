@@ -329,6 +329,55 @@ council pick a storage format owl,smith        # explicit members
 Cost scales as members × rounds completions plus one scribe call — with the
 default cast and rounds that's 9 calls, so mind the clock on slow boxes.
 
+### Feature 11 — Workday (the chain of command)
+
+One operator prompt = one full day of the cast, under the hood of the same
+`run` command. You are the top of the chain; your prompt is the day's task
+against the **global mission**, and the day runs a fixed protocol:
+
+1. **Morning briefing** — the cast convenes (no tools, deliberation only) over
+   the mission, **yesterday's debrief** and today's task; each persona says what
+   it would take on.
+2. **The foreman** cuts assignments from that discussion — strict
+   `ASSIGNMENT: <name>: <brief>` lines, at most `workday_max_workers`. A
+   foreman that flops fails open: the whole task goes to one worker; the day
+   never dies on a malformed dispatch.
+3. **The work** — each assigned persona runs as a subagent child with its own
+   tool posture and `workday_worker_turns` cap. Same registry, same confirm
+   gates, same taint rail: the day changes *who* works, never what work is
+   allowed to touch.
+4. **Evening debrief** — the cast convenes again over the reports and calls out
+   anything dressed up; the **scribe** writes the day up: What happened /
+   Mission status / Open items / Tomorrow.
+5. **Escalation and carryover** — the debrief is the reply you read, it becomes
+   the run's summary (so ordinary future packages inherit it), it's written to
+   `<project>/days/NNNN-<slug>.md` (full room-by-room record in
+   `NNNN-<slug>.log.md`), and the **next** day's briefing opens with it. Days
+   chain: task → work → debrief → tomorrow's briefing.
+6. **The harvest** (the self-improvement loop) — with `skills_enabled` on, a
+   final bounded pass with ONLY the skills tools banks what the day taught as
+   skills, so tomorrow's shift doesn't relearn it.
+
+`hey <name>, ...` still pulls one persona aside for a direct order, skipping
+the day. A wall clock (`workday_max_seconds`) guards the whole day: on expiry,
+remaining workers are skipped (on the record, honestly) and the day goes
+straight to the debrief — you always get the write-up.
+
+| Flag | Default | Effect |
+|---|---|---|
+| `workday_enabled` | `false` | every `run` is a full day (needs `personas_enabled`) |
+| `workday_max_workers` | `3` | assignments the foreman may cut |
+| `workday_worker_turns` | `14` | each worker's turn cap |
+| `workday_briefing_rounds` | `1` | morning room passes (0 = skip the room) |
+| `workday_debrief_rounds` | `1` | evening room passes (0 = skip the room) |
+| `workday_max_seconds` | `1800` | the day clock |
+| `workday_skill_harvest` | `true` | bank lessons as skills (bites only with `skills_enabled`) |
+
+Cost: a default day with the 4-persona cast is 4 briefing + 1 foreman +
+(workers × their turns) + 4 debrief + 1 scribe completions — budget a day like
+a long run, and trim rounds/workers on slow boxes. `days` lists the record;
+`days show 0003` prints a debrief; `days log 0003` prints the whole day.
+
 ## Static package budget (measured, 60K box)
 
 Keep an eye on the fixed block — it's sent on every single call:
@@ -381,5 +430,6 @@ what it was before. Nothing here changes on-disk formats without silent migratio
 | `skills [show\|edit <name>]` | list / read / nano the agent's how-to notes |
 | `personas [show\|edit\|use <name>]` | list the cast / read / nano / set the default voice |
 | `council <topic> [names]` | convene the cast on a topic; the scribe writes the outcome |
+| `days [show\|log <id>]` | the workday record — debriefs and full day logs |
 | `checkpoint [restore <id>]` | list project snapshots / revert to one |
 | `debug prefix` | measure the byte prefix two consecutive packages share |

@@ -269,6 +269,26 @@ def council_scribe_prompt() -> str:
     return _template("council_scribe.md")
 
 
+def briefing_member_prompt() -> str:
+    return _template("briefing_member.md")
+
+
+def foreman_prompt() -> str:
+    return _template("foreman.md")
+
+
+def debrief_member_prompt() -> str:
+    return _template("debrief_member.md")
+
+
+def debrief_scribe_prompt() -> str:
+    return _template("debrief_scribe.md")
+
+
+def harvest_prompt() -> str:
+    return _template("harvest.md").strip()
+
+
 def verify_before_done_nudge() -> str:
     return _template("verify_before_done.md").strip()
 

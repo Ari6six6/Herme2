@@ -53,11 +53,12 @@ def _cap_out(last_text, tool_names, max_turns, reason) -> str:
 
 
 def run_child(parent_ctx: ToolContext, brief: str, allowed_tools, cfg,
-              log=None, persona=None) -> str:
+              log=None, persona=None, max_turns=None) -> str:
     """Run one delegated child loop and return its single conclusion string.
     With `persona` (feature 9) the child speaks and works as that persona: its
     voice rides after the subagent prompt, its tool posture is the default
-    allowed set, and its turn cap tightens the child's own."""
+    allowed set, and its turn cap tightens the child's own. `max_turns`
+    overrides the delegate_max_turns base (the workday's worker budget)."""
     from hermes.agent import _assistant_msg, strip_think
 
     backend = parent_ctx.backend
@@ -66,7 +67,9 @@ def run_child(parent_ctx: ToolContext, brief: str, allowed_tools, cfg,
     think_re = parent_ctx.think_re
     depth = (parent_ctx.depth or 0) + 1
     max_depth = int(cfg.get("delegate_max_depth", 1))
-    max_turns = max(1, int(cfg.get("delegate_max_turns", 20)))
+    if max_turns is None:
+        max_turns = int(cfg.get("delegate_max_turns", 20))
+    max_turns = max(1, int(max_turns))
     if persona is not None:
         if not allowed_tools:
             allowed_tools = list(persona.tools or [])

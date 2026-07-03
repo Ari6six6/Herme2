@@ -68,6 +68,18 @@ DEFAULTS: dict = {
     "council_rounds": 2,  # full round-robin passes over the cast
     "council_max_seconds": 600,  # wall-clock cap; on expiry, jump straight to the scribe
     "council_transcript_chars": 24000,  # rolling transcript budget fed to each speaker
+    # Workday (feature 11): one operator prompt = one full day of the cast —
+    # morning briefing (over mission + yesterday's debrief + today's task),
+    # foreman-cut assignments worked by persona children, evening debrief whose
+    # write-up is the operator's reply AND the next day's carryover. Needs
+    # personas_enabled; `hey <name>` still pulls one persona aside directly.
+    "workday_enabled": False,
+    "workday_max_workers": 3,  # assignments the foreman may cut per day
+    "workday_worker_turns": 14,  # each worker's own turn cap
+    "workday_briefing_rounds": 1,  # round-robin passes in the morning room (0 = skip)
+    "workday_debrief_rounds": 1,  # round-robin passes in the evening room (0 = skip)
+    "workday_max_seconds": 1800,  # day clock; on expiry, straight to the debrief
+    "workday_skill_harvest": True,  # bank the day's lessons as skills (needs skills_enabled)
     # Prefix-cache-friendly package ordering (feature 5): move volatile runtime
     # status (date, GPU, hosts) out of the stable header so the header + persona
     # + tools + skills index stay a byte-identical prefix for vLLM prefix caching.

@@ -164,6 +164,25 @@ def cmd_run(cfg, args: str) -> None:
     }
     prompt = args.strip()
     backend = make_backend(cfg)
+    # Workday (feature 11): the same `run` becomes a full day of the cast —
+    # briefing, assigned work, debrief. An explicit `hey <name>` is a direct
+    # order to one persona and skips the day.
+    if cfg.get("personas_enabled", False) and cfg.get("workday_enabled", False):
+        from hermes import personas as personas_mod
+        from hermes import workday
+        catalog = personas_mod.load_all(project, cfg.get("persona_max_chars", 2000))
+        p, rest, attempted = personas_mod.parse_invocation(prompt, catalog)
+        if p is not None:
+            print(dim(f"(speaking as {p.name} — pulled aside, no workday)"))
+            agent.run(project, rest, cfg, backend, gpu=gpu, env=env,
+                      sandbox=sandbox, persona=p)
+            return
+        if attempted:
+            print(dim(f"(no persona named '{attempted}' — the day takes the "
+                      "whole prompt; `personas` lists the cast)"))
+        workday.run_day(project, prompt, cfg, backend, gpu=gpu, env=env,
+                        sandbox=sandbox)
+        return
     persona, prompt = _pick_persona(cfg, project, prompt, backend, spec)
     agent.run(project, prompt, cfg, backend, gpu=gpu, env=env, sandbox=sandbox,
               persona=persona)
@@ -700,6 +719,40 @@ def cmd_personas(cfg, args: str) -> None:
             print(dim("(no personas — the shipped cast seems missing)"))
 
 
+def cmd_days(cfg, args: str) -> None:
+    """The workday record (feature 11).
+      days            list the day log (newest last)
+      days show <id>  print a day's debrief (NNNN prefix is enough)
+      days log <id>   print the full day log — briefing, assignments, reports
+    """
+    from hermes import workday
+    project = _current_project(cfg)
+    if project is None:
+        print(yellow("no current project"))
+        return
+    entries = workday.list_days(project)
+    parts = args.split(maxsplit=1)
+    sub = parts[0] if parts else "list"
+    name = parts[1].strip() if len(parts) > 1 else ""
+    if sub in ("show", "log") and name:
+        match = next((p for p in entries if p.name.startswith(name)), None)
+        if match is None:
+            print(red(f"no such day: {name}") + dim(" — `days` lists them"))
+            return
+        if sub == "log":
+            log_path = match.with_name(match.stem + ".log.md")
+            print(log_path.read_text().rstrip() if log_path.exists()
+                  else dim("(no log for that day)"))
+        else:
+            print(match.read_text().rstrip())
+    else:
+        if not entries:
+            print(dim("(no days yet — with workday_enabled on, every `run` is one)"))
+        for p in entries:
+            first = p.read_text().splitlines()[0].lstrip("# ")
+            print(f"  {cyan(p.stem)}  {dim(first[:100])}")
+
+
 def cmd_council(cfg, args: str) -> None:
     """Council mode (feature 10): the cast deliberates, the scribe writes.
       council <topic>              the loaded cast (up to 4) takes the topic
@@ -855,6 +908,7 @@ HELP = f"""\
 {cyan('skills')} [show|edit <name>]  the agent's reusable how-to notes
 {cyan('personas')} [show|edit|use <name>]  the cast of archetypes ({cyan('run hey <name>, ...')} invokes one)
 {cyan('council')} <topic> [names]  the cast deliberates in a clocked circle; the scribe writes the outcome
+{cyan('days')} [show|log <id>]   the workday record — each `run` is a briefing→work→debrief day when on
 {cyan('checkpoint')} [restore <id>]  project snapshots before file-mutating turns
 {cyan('tools')}                 list the agent's tools
 {cyan('gpu')} attach [sshstr] | serve | status | tunnel | down   {dim('(alias: g)')}
@@ -898,6 +952,8 @@ def dispatch(cfg, line: str) -> bool:
         cmd_personas(cfg, rest)
     elif cmd == "council":
         cmd_council(cfg, rest)
+    elif cmd in ("days", "day"):
+        cmd_days(cfg, rest)
     elif cmd == "debug":
         cmd_debug(cfg, rest)
     elif cmd in ("checkpoint", "checkpoints"):
