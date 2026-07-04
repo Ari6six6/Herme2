@@ -33,32 +33,32 @@ DEFAULTS: dict = {
     "package_budget_tokens": 10000,  # scaled down automatically on small contexts
     "history_max_prompts": 30,
     "summaries_max": 8,
-    # Directive reconciliation (feature 1). The machinery is off by default; the
-    # header recency-rule line is on by default (it's true and cheap regardless).
-    "directives_enabled": False,  # distil history into directives.md; send it + last K prompts
+    # Directive reconciliation (feature 1). On by default (full-power config);
+    # the header recency-rule line is on regardless (it's true and cheap).
+    "directives_enabled": True,  # distil history into directives.md; send it + last K prompts
     "directive_header_rule": True,  # add the "recent instruction wins" line to the header
     "reconcile_every_runs": 10,  # auto-reconcile every N runs (plus migration on first run)
     "directives_recent_k": 5,  # raw prompts still sent when directives are on
-    # Lazy compaction of the live within-prompt conversation (feature 2). Off by
-    # default; needs a known served context window to compute the thresholds.
-    "compaction_enabled": False,
+    # Lazy compaction of the live within-prompt conversation (feature 2). On by
+    # default; needs a known served context window, safe no-op without one.
+    "compaction_enabled": True,
     "compaction_trigger_frac": 0.5,  # compact when the live context passes this fraction of the window
     "compaction_keep_last_turns": 6,  # always keep this many most-recent turns verbatim
     "compaction_floor_frac": 0.25,  # target size after a compaction (documented target, see USAGE)
     # Skills (feature 3): reusable how-to notes. Index of one-liners in the
     # package; load_skill pulls a full body on demand.
-    "skills_enabled": False,  # inject the skills index + register load_skill/write_skill
-    "skills_nudge": False,  # after a run that took figuring-out, invite writing/updating a skill
+    "skills_enabled": True,  # inject the skills index + register load_skill/write_skill
+    "skills_nudge": True,  # after a run that took figuring-out, invite writing/updating a skill
     "skills_nudge_max_turns": 3,  # tool-call budget for that post-task skill-writing pass
     # Subagent delegation (feature 4): a delegate tool that runs a clean child
     # loop with a subset of tools and returns one conclusion.
-    "delegate_enabled": False,
+    "delegate_enabled": True,
     "delegate_max_turns": 20,  # child turn cap (lower than the parent's by default)
     "delegate_max_depth": 1,  # 1 = children don't spawn grandchildren
     # Prefix-cache-friendly package ordering (feature 5): move volatile runtime
     # status (date, GPU, hosts) out of the stable header so the header + persona
     # + tools + skills index stay a byte-identical prefix for vLLM prefix caching.
-    "prefix_cache_order": False,
+    "prefix_cache_order": True,
     # Checkpointing (feature 6): snapshot the project before a turn mutates files
     # so a run gone sideways is one revert. On by default — pure safety.
     "checkpointing": True,
@@ -66,7 +66,7 @@ DEFAULTS: dict = {
     # Verification enforcement (feature 7): require an executed verification step
     # before a task is reported done. Adds a header rule + a one-shot harness
     # nudge when a file-mutating run finishes without running anything.
-    "verify_before_done": False,
+    "verify_before_done": True,
     "allow_gpu_network": False,  # False: box may install/build (net), but raw egress goes via the phone; True: unrestricted box net
     "max_model_len": 0,  # 0 = pick automatically from detected VRAM
     "gpu_port": 8000,

@@ -2,6 +2,8 @@ from hermes import package
 
 
 def test_sections_and_order(project, cfg):
+    # The classic layout: directives replace the full prompt history when on.
+    cfg.set("directives_enabled", False)
     project.append_history(1, "first prompt")
     run_id, run_dir = project.new_run()
     (run_dir / "summary.md").write_text("did a thing")
@@ -53,6 +55,8 @@ def test_budget_scales_with_context_window(cfg):
 
 
 def test_system_prompt_renders(project, cfg):
+    # Volatile status inline in the header (prefix-cache ordering moves it out).
+    cfg.set("prefix_cache_order", False)
     messages = package.assemble(
         project, "x", {"gpu_status": "h:1 (vllm:up)", "context_window": 131072}, cfg
     )
@@ -65,6 +69,7 @@ def test_system_prompt_renders(project, cfg):
 
 
 def test_system_prompt_lists_managed_hosts(project, cfg):
+    cfg.set("prefix_cache_order", False)
     env = {"managed_hosts": "web=root@1.2.3.4:22 (primary web)"}
     messages = package.assemble(project, "x", env, cfg)
     assert "web=root@1.2.3.4:22" in messages[0]["content"]

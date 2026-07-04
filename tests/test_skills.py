@@ -78,6 +78,7 @@ def test_index_absent_when_no_skills(two_projects, cfg):
 def test_skills_index_in_system_prompt_only_when_enabled(two_projects, cfg):
     a, _ = two_projects
     skills_mod.write(a, "thing", "One-liner for thing\n\nbody", scope="global")
+    cfg.set("skills_enabled", False)
     off = package.assemble(a, "x", {}, cfg)[0]["content"]
     assert "One-liner for thing" not in off
     cfg.set("skills_enabled", True)
@@ -89,6 +90,7 @@ def test_skills_index_in_system_prompt_only_when_enabled(two_projects, cfg):
 
 def test_skill_tools_registered_only_when_enabled(two_projects, cfg):
     a, _ = two_projects
+    cfg.set("skills_enabled", False)
     reg = build_registry(a, cfg, lambda *x, **k: True)
     assert "load_skill" not in reg.names()
     cfg.set("skills_enabled", True)
@@ -138,6 +140,7 @@ def test_skills_nudge_lets_agent_capture_a_skill(two_projects, cfg):
     cfg.set("skills_enabled", True)
     cfg.set("skills_nudge", True)
     cfg.set("plan_build_tasks", False)
+    cfg.set("verify_before_done", False)  # isolate the nudge under test
     # A run that "figures something out": a tool error, then a fix, then finish.
     # After finish, the nudge pass writes a skill.
     script = [

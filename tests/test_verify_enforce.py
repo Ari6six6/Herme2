@@ -12,6 +12,7 @@ def _run(project, cfg, script, gpu=None):
 
 
 def test_header_rule_present_only_when_enabled(project, cfg):
+    cfg.set("verify_before_done", False)
     off = package.assemble(project, "x", {}, cfg)[0]["content"]
     assert "Verification rule" not in off
     cfg.set("verify_before_done", True)
@@ -85,7 +86,8 @@ def test_no_bounce_for_non_mutating_run(project, cfg):
     assert result.turns == 2  # a read/note-only run isn't forced to execute
 
 
-def test_disabled_by_default(project, cfg):
+def test_no_enforcement_when_flag_off(project, cfg):
+    cfg.set("verify_before_done", False)
     result = _run(
         project, cfg,
         [

@@ -29,7 +29,7 @@ sends that file plus only your last few raw prompts instead of the whole log.
 
 | Flag | Default | Effect |
 |---|---|---|
-| `directives_enabled` | `false` | turn the machinery on: distil history into `directives.md`, and send it + the last K prompts instead of the full log |
+| `directives_enabled` | `true` | turn the machinery on: distil history into `directives.md`, and send it + the last K prompts instead of the full log |
 | `directive_header_rule` | `true` | add one line to the system header: *"When instructions conflict, the more recent one wins."* On even when the machinery is off — it's cheap and true. |
 | `reconcile_every_runs` | `10` | auto-reconcile every N runs (plus a one-time catch-up on an old project's first run) |
 | `directives_recent_k` | `5` | how many raw prompts still ride along with the distilled directives |
@@ -69,7 +69,7 @@ the last few turns verbatim.
 
 | Flag | Default | Effect |
 |---|---|---|
-| `compaction_enabled` | `false` | turn on live compaction |
+| `compaction_enabled` | `true` | turn on live compaction |
 | `compaction_trigger_frac` | `0.5` | compact when the live context passes this fraction of the window |
 | `compaction_keep_last_turns` | `6` | always keep this many most-recent turns verbatim |
 | `compaction_floor_frac` | `0.25` | documented target size after a compaction (informational) |
@@ -105,8 +105,8 @@ trick as the toolbox. Ten skills cost well under 500 tokens in the package.
 
 | Flag | Default | Effect |
 |---|---|---|
-| `skills_enabled` | `false` | put the skills index in the system prompt and register `load_skill`/`write_skill` |
-| `skills_nudge` | `false` | after a run that took real figuring-out, give the agent a short pass to write or update a skill |
+| `skills_enabled` | `true` | put the skills index in the system prompt and register `load_skill`/`write_skill` |
+| `skills_nudge` | `true` | after a run that took real figuring-out, give the agent a short pass to write or update a skill |
 | `skills_nudge_max_turns` | `3` | tool budget for that post-task pass |
 
 "Figuring-out" is detected by the harness: a run that hit a tool error, ran long
@@ -137,7 +137,7 @@ context ceiling from a hard limit into a soft one: hand the wide, noisy sub-task
 
 | Flag | Default | Effect |
 |---|---|---|
-| `delegate_enabled` | `false` | register the `delegate` tool |
+| `delegate_enabled` | `true` | register the `delegate` tool |
 | `delegate_max_turns` | `20` | the child's own turn cap (lower than the parent's 40) |
 | `delegate_max_depth` | `1` | 1 = children can't spawn grandchildren |
 
@@ -162,7 +162,7 @@ header + persona + tool catalog + skills index a stable prefix.
 
 | Flag | Default | Effect |
 |---|---|---|
-| `prefix_cache_order` | `false` | move volatile runtime status out of the header |
+| `prefix_cache_order` | `true` | move volatile runtime status out of the header |
 
 Command:
 - `debug prefix` — assembles two consecutive packages (with a changed GPU/host
@@ -214,7 +214,7 @@ gets bounced once with "verify before concluding" before its finish is accepted.
 
 | Flag | Default | Effect |
 |---|---|---|
-| `verify_before_done` | `false` | add the verification header rule + the one-shot execute-before-finish nudge |
+| `verify_before_done` | `true` | add the verification header rule + the one-shot execute-before-finish nudge |
 
 This is the lightweight, always-available cousin of `verify_code_runs` (the
 independent verifier pass, which needs a GPU sandbox). `verify_before_done` needs
@@ -267,11 +267,13 @@ Keep an eye on the fixed block — it's sent on every single call:
 
 That leaves comfortable headroom under the ~6–8K ceiling for the static block.
 
-## Recommended settings for a 60K box (copy-paste)
+## Full-power settings (now the shipped defaults)
 
-Defaults are conservative (most new features off). This is a sensible full-power
-setup for a 60K-token deployment — paste into `~/.hermes/config.json` or run each
-as `config set`:
+**This full-power setup is the shipped default** — a fresh install runs with all
+of it on. Nothing to paste; the block below is the reference for what "full
+power" means (and what to `config set <flag> false` if you want to dial one
+back). If you had explicitly set any of these in `~/.hermes/config.json`, your
+stored setting still wins — defaults never override stored config.
 
 ```
 directives_enabled     true     # distil standing instructions; fixes the conflict bug

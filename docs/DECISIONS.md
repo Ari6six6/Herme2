@@ -8,8 +8,13 @@ and the alternative I passed on. Newest at the bottom of each feature.
 - **No new dependencies.** Everything so far is Python stdlib plus the two deps
   the app already had (`httpx`, `prompt_toolkit`). Any new dependency gets a line
   here first.
-- **Every feature behind a config flag in `config.py::DEFAULTS`.** Defaults off,
-  except checkpointing and the directive header line (per the brief).
+- **Every feature behind a config flag in `config.py::DEFAULTS`.** Originally
+  defaults-off except checkpointing and the directive header line (per the
+  brief). **Superseded:** once every feature had shipped and stabilized, the
+  operator flipped the posture — the full-power configuration (every flag from
+  the USAGE recommendations) is now the shipped default. The flags remain, each
+  is still individually reversible, and a stored `config.json` always wins over
+  defaults, so an explicit opt-out survives the change.
 
 ## Feature 1 — Directive reconciliation
 

@@ -21,7 +21,8 @@ ENV_B = {"gpu_status": "2.2.2.2:8000 (vllm:DOWN)", "managed_hosts": "web=root@2.
          "context_window": 60000}
 
 
-def test_off_by_default_status_in_header(project, cfg):
+def test_off_status_in_header(project, cfg):
+    cfg.set("prefix_cache_order", False)
     system = package.assemble(project, "x", ENV_A, cfg)[0]["content"]
     assert "GPU: 1.1.1.1:8000" in system  # volatile status inline in the header
     assert "# RUNTIME STATUS" not in package.assemble(project, "x", ENV_A, cfg)[1]["content"]
@@ -29,6 +30,7 @@ def test_off_by_default_status_in_header(project, cfg):
 
 def test_off_header_diverges_on_status_change(project, cfg):
     # With ordering off, a GPU/host change perturbs the header early.
+    cfg.set("prefix_cache_order", False)
     sa = package.assemble(project, "x", ENV_A, cfg)[0]["content"]
     sb = package.assemble(project, "x", ENV_B, cfg)[0]["content"]
     assert sa != sb
@@ -65,6 +67,7 @@ def test_on_shared_prefix_covers_full_header(project, cfg):
 
 def test_on_prefix_beats_off_when_status_changes(project, cfg):
     # Same two volatile-differing calls: ordering ON must share a longer prefix.
+    cfg.set("prefix_cache_order", False)
     off_a = _text(package.assemble(project, "p1", ENV_A, cfg))
     off_b = _text(package.assemble(project, "p1", ENV_B, cfg))
     off_shared = _common_prefix(off_a, off_b)

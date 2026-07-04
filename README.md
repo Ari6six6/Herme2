@@ -56,19 +56,19 @@ Everything is plain text on the VPS — `nano mission.md` is the long-term memor
 
 ## What it does
 
-Beyond the core loop, a set of capabilities you turn on per project (all in one
-config file; **full reference and recommended 60K settings in
+Beyond the core loop, a set of capabilities — **all on by default** (each is a
+single flag in one config file if you want to dial it back; **full reference in
 [docs/USAGE.md](docs/USAGE.md)**):
 
 | Capability | What it buys you | Default |
 |---|---|---|
-| **Directive reconciliation** | Distils your whole prompt history into a `directives.md` that resolves "never X → now X" conflicts by recency, instead of both sitting in context with equal weight. | off |
-| **Lazy compaction** | Folds the middle of a long run into a summary (keeping exact commands/errors) so a 40-turn task stays inside the window. | off |
-| **Skills** | The agent's own how-to notes — one file each, a one-line index in the prompt, full body loaded on demand. Global (cross-project) or per-project; it grows them after runs that took figuring-out. | off |
-| **Subagent delegation** | `delegate(brief, tools)` runs a clean child agent that returns one conclusion — its spam never enters your context. Turns the context ceiling from hard to soft. | off |
-| **Prefix-cache ordering** | Moves volatile bytes out of the header so the leading package is byte-identical across calls (cheaper on a caching server). `debug prefix` measures it. | off |
+| **Directive reconciliation** | Distils your whole prompt history into a `directives.md` that resolves "never X → now X" conflicts by recency, instead of both sitting in context with equal weight. | **on** |
+| **Lazy compaction** | Folds the middle of a long run into a summary (keeping exact commands/errors) so a 40-turn task stays inside the window. | **on** |
+| **Skills** | The agent's own how-to notes — one file each, a one-line index in the prompt, full body loaded on demand. Global (cross-project) or per-project; it grows them after runs that took figuring-out. | **on** |
+| **Subagent delegation** | `delegate(brief, tools)` runs a clean child agent that returns one conclusion — its spam never enters your context. Turns the context ceiling from hard to soft. | **on** |
+| **Prefix-cache ordering** | Moves volatile bytes out of the header so the leading package is byte-identical across calls (cheaper on a caching server). `debug prefix` measures it. | **on** |
 | **Checkpointing** | Snapshots the project before file-mutating turns; `checkpoint restore <id>` rewinds a run gone sideways. | **on** |
-| **Verification enforcement** | Bounces a finish that changed files but never *ran* anything. | off |
+| **Verification enforcement** | Bounces a finish that changed files but never *ran* anything. | **on** |
 | **Taint tracking** | Content pulled from the network marks the next turn untrusted — its tool calls all require your y/n, so a hostile page can't steer a privileged action. The prompt-injection rail. | **always on** |
 
 Every toggle is reversible and ships with silent migration — flipping one back
@@ -92,8 +92,8 @@ declare victory — verification theater. So Hermes stacks guards:
   *same real sandbox* — re-runs the actual code and returns `VERDICT: PASS/FAIL`.
   A FAIL is ground truth that bounces the run back with the real error; it fails
   closed and is bounded (`verify_rounds`). Turn off with `verify_code_runs false`.
-- **Verify-before-done** (opt-in): even without a GPU, a run that changed files
-  but never executed anything is nudged once to actually run it.
+- **Verify-before-done** (on by default): even without a GPU, a run that changed
+  files but never executed anything is nudged once to actually run it.
 
 The independent verification pass is the same weights wearing a different hat —
 fresh context, a skeptical prompt, the same real sandbox — and a PASS is only

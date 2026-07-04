@@ -77,7 +77,8 @@ def test_package_swaps_full_log_for_directives_plus_lastk(project, cfg):
 
 
 def test_package_unchanged_when_directives_off(project, cfg):
-    # Default off -> full recent log, no DIRECTIVES section.
+    # Off -> full recent log, no DIRECTIVES section.
+    cfg.set("directives_enabled", False)
     for i in range(1, 6):
         project.append_history(i, f"prompt {i}")
     user = package.assemble(project, "go", {}, cfg)[1]["content"]

@@ -128,27 +128,27 @@ persona edit          # opens nano; keep it short — a few lines of who Hermes 
 
 ---
 
-## 4. Turn the evolved features on (optional but recommended)
+## 4. The evolved features (all on by default)
 
-Out of the box most of the newer capabilities are off (conservative defaults).
-For a full-power setup on a 60K-context box, flip them on once:
+Out of the box every evolved capability is on — the full-power setup **is** the
+default. Nothing to flip. For reference, this is what's running:
 
 ```
-config set directives_enabled true     # standing instructions that resolve conflicts by recency
-config set compaction_enabled true      # keep long runs inside the context window
-config set skills_enabled true          # reusable how-to notes the agent grows
-config set skills_nudge true
-config set delegate_enabled true        # offload big sub-tasks to a clean child agent
-config set prefix_cache_order true       # cheaper calls when the server caches prefixes
-config set verify_before_done true       # never report done without running it
+directives_enabled true      # standing instructions that resolve conflicts by recency
+compaction_enabled true      # keep long runs inside the context window
+skills_enabled true          # reusable how-to notes the agent grows
+skills_nudge true
+delegate_enabled true        # offload big sub-tasks to a clean child agent
+prefix_cache_order true      # cheaper calls when the server caches prefixes
+verify_before_done true      # never report done without running it
 ```
 
-Already on and worth leaving on: `checkpointing` (auto-snapshots before file
-changes) and the directive header rule. Always on, no switch: taint tracking (the
-prompt-injection rail). **What each flag does, its token cost, and the exact
-recommended values are in `docs/USAGE.md`** — that's the reference; this is just
-the "flip them on" step. Every one is reversible: set it back and behaviour is
-exactly what it was.
+Also on: `checkpointing` (auto-snapshots before file changes) and the directive
+header rule. Always on, no switch: taint tracking (the prompt-injection rail).
+**What each flag does and its token cost are in `docs/USAGE.md`** — that's the
+reference. Every one is reversible: `config set <flag> false` and behaviour is
+exactly what it was, and anything you've set in `~/.hermes/config.json` always
+wins over the defaults.
 
 ---
 
@@ -309,14 +309,7 @@ exit && ssh you@your-vps-ip           # log back in for docker group + PATH
 hermes
 config set vast_api_key <key>
 persona edit
-# (optional) flip on the evolved features — see docs/USAGE.md:
-config set directives_enabled true
-config set compaction_enabled true
-config set skills_enabled true
-config set skills_nudge true
-config set delegate_enabled true
-config set prefix_cache_order true
-config set verify_before_done true
+# (the evolved features are all on by default — see docs/USAGE.md to tune)
 
 # --- each session ---
 project new blog          # or: project use blog

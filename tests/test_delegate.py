@@ -112,7 +112,8 @@ def test_cap_out_returns_structured_progress(project, cfg):
 
 
 def test_delegate_disabled_returns_error(project, cfg):
-    reg = build_registry(project, cfg, lambda *a, **k: True)  # delegate_enabled off
+    cfg.set("delegate_enabled", False)
+    reg = build_registry(project, cfg, lambda *a, **k: True)
     assert "delegate" not in reg.names()
 
 

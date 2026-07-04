@@ -5,6 +5,9 @@ from hermes.llm import MockBackend
 
 
 def run_agent(project, cfg, script, confirm=None, gpu=None):
+    # These tests exercise the core loop mechanics in isolation; the
+    # verify-before-done nudge (on by default) has its own suite.
+    cfg.set("verify_before_done", False)
     backend = MockBackend(script)
     return agent.run(
         project,
