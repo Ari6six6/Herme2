@@ -1,6 +1,6 @@
 [project]
 name = "hermes-agent"
-version = "0.1.0"
+version = "0.2.0"
 description = "Hermes: a package-per-prompt agent shell for Termux, driving Hermes-4.3-36B on rented Vast.ai GPUs"
 requires-python = ">=3.10"
 dependencies = [
