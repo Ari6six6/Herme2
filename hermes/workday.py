@@ -164,8 +164,7 @@ def run_day(project, task, cfg, backend, gpu=None, env=None, confirm_fn=None,
 
     project.append_history(run_id, task)
 
-    max_chars = cfg.get("persona_max_chars", 2000)
-    catalog = personas_mod.load_all(project, max_chars)
+    catalog = personas_mod.load_cast(project, cfg)
 
     def _office(key, default):
         """Resolve a configured office-holder from the catalog. None = the
@@ -237,12 +236,26 @@ def run_day(project, task, cfg, backend, gpu=None, env=None, confirm_fn=None,
     )
     carryover = latest_debrief(project)
     yesterday = carryover[1] if carryover else "(first day — no debrief yet)"
+    # Landmarks (feature 13): marks standing on the road ride into the papers;
+    # the room must address them, and the night will archive what this day saw.
+    standing = []
+    if cfg.get("landmarks_enabled", False):
+        from hermes import landmarks as landmarks_mod
+        standing = landmarks_mod.load(project)
+        if standing:
+            print(dim(f"  landmarks standing: "
+                      f"{', '.join(m.name for m in standing)}"))
     papers = (
         "# MISSION (global, across days)\n" + (mission or "(empty)")
         + "\n\n# YESTERDAY'S DEBRIEF (carryover)\n"
         + package.truncate_keep_tail(yesterday, room_budget)
         + "\n\n# TODAY'S TASK (from the operator)\n" + task.strip()
     )
+    if standing:
+        from hermes import landmarks as landmarks_mod
+        papers += landmarks_mod.papers_block(standing)
+        for m in standing:
+            log({"role": "landmark", "name": m.name, "content": m.text})
     print(dim(f"  morning briefing — {', '.join(p.name for p in staff)}"))
     briefing = _convene(package.briefing_member_prompt(), papers,
                         cfg.get("workday_briefing_rounds", 1), "briefing")
@@ -379,13 +392,21 @@ def run_day(project, task, cfg, backend, gpu=None, env=None, confirm_fn=None,
                 + f"\n\nThe watcher ({sup.name}) sent it back: {note}\n"
                 "Address exactly that objection and file a corrected conclusion."
             )
-            report = subagent.run_child(ctx, rework_brief, [], cfg, log=log,
-                                        persona=worker, max_turns=worker_turns)
+            report = subagent.run_child(ctx, rework_brief, _grant(worker), cfg,
+                                        log=log, persona=worker,
+                                        max_turns=worker_turns)
             log({"role": "report", "name": worker.name, "content": report})
         return report, f"{sup.name}: " + "; ".join(events)
 
     reports: list[Report] = []
     worker_turns = cfg.get("workday_worker_turns", 14)
+
+    def _grant(worker):
+        """Same capacities: a sheet without a tools line means the WHOLE
+        registry, not nothing — the Nine differ by persona, never by reach.
+        A sheet that does carry a posture keeps it (run_child applies it)."""
+        return [] if worker.tools else registry.names()
+
     for p, brief in assignments:
         if time.monotonic() - start > clock:
             clock_cut = True
@@ -401,7 +422,7 @@ def run_day(project, task, cfg, backend, gpu=None, env=None, confirm_fn=None,
             "is read out at the evening debrief — make it factual."
         )
         print(dim(f"  {p.name} clocks in"))
-        out = subagent.run_child(ctx, worker_brief, [], cfg, log=log,
+        out = subagent.run_child(ctx, worker_brief, _grant(p), cfg, log=log,
                                  persona=p, max_turns=worker_turns)
         log({"role": "report", "name": p.name, "content": out})
         trail = ""
@@ -519,7 +540,48 @@ def run_day(project, task, cfg, backend, gpu=None, env=None, confirm_fn=None,
         + (_transcript_text(debrief_talk) or "(skipped)")
         + "\n\n# DEBRIEF (as written)\n\n" + debrief.rstrip() + "\n"
     )
+    if standing:
+        day_log += ("\n# LANDMARKS ATTENDED\n\n"
+                    + "\n".join(f"- {m.name}: {m.summary}" for m in standing)
+                    + "\n")
     (d / f"{base}.log.md").write_text(day_log)
+
+    # The night clears the road: marks this day saw are archived under its
+    # name. Marks left during the day stand for tomorrow.
+    if standing:
+        from hermes import landmarks as landmarks_mod
+        landmarks_mod.sweep(project, standing, base)
+        print(dim(f"  the night clears {len(standing)} landmark(s) "
+                  "from the road"))
+
+    # Service records (feature 12): the day shapes who worked it. One line
+    # per character onto its jacket — workers and offices alike — riding into
+    # every voice they speak with tomorrow.
+    if cfg.get("service_records", False):
+        keep = int(cfg.get("record_file_chars", 12000))
+
+        def _jacket(name, entry):
+            personas_mod.append_record(project, name, f"- {base}: {entry}", keep)
+
+        for r in reports:
+            first = (r.conclusion.strip().splitlines() or ["(nothing)"])[0][:120]
+            entry = f"sent to \"{r.brief[:80]}\" — "
+            entry += f"FELL: {first}" if r.fell() else first
+            if "sent back" in r.trail:
+                entry += " [sent back by the watcher]"
+            _jacket(r.worker, entry)
+        checked = [r for r in reports if r.trail]
+        if sup is not None and checked:
+            bounced = sum(1 for r in checked if "sent back" in r.trail)
+            _jacket(sup.name, f"watched {len(checked)} handoff(s)"
+                    + (f", sent {bounced} back" if bounced else ", all accepted"))
+        delivered = [r for r in reports if r.delivery]
+        if courier is not None and delivered:
+            fallen = sum(1 for r in delivered if r.fell())
+            _jacket(courier.name, f"delivered {len(delivered)} report(s)"
+                    + (f", {fallen} died unheard" if fallen else ""))
+        if general is not None and roster_call:
+            _jacket(general.name, f"called the roster: {len(reports)} name(s)")
 
     summary = package.truncate_keep_head(
         f"Workday {base}. Reports from: "

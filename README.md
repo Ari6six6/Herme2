@@ -73,6 +73,8 @@ config file; **full reference and recommended 60K settings in
 | **Personas** | The Nine (see `docs/THE_NINE.md`): a shipped cast of named archetypes, one markdown file each — same capacities, different questions. `run hey owl, ...` invokes one; routing picks the fit when you talk normally; `delegate` can spawn a child *as* one. | off |
 | **Council** | The cast deliberates on a topic in a clocked round-robin circle (no tools); a scribe writes the outcome — agreements, disagreements, a recommendation. | off |
 | **Workday** | One prompt = one life of the domain admin, worked by the Nine: briefing, Odin's dispatch, worker children, the owl's handoff, Sveja's deliveries, nightfall and the hawk's roster, the closing debrief that briefs the next day — with Freya banking lessons as skills. | off |
+| **Service records** | Organic identity: every run and day a character works adds a line to its jacket (`records/<name>.md`), and the tail rides in its voice everywhere it speaks. Identity accretes from the record; the oldest days are forgotten first. | off |
+| **Landmarks** | The rendezvous between lifecycles: marks left on the road (`landmark <name> <text>`, or the `leave_landmark` tool mid-mission) ride into every morning briefing, which must address them; the night archives what the day attended. | off |
 
 Every toggle is reversible and ships with silent migration — flipping one back
 gives you exactly the prior behaviour.

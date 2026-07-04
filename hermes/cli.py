@@ -170,7 +170,7 @@ def cmd_run(cfg, args: str) -> None:
     if cfg.get("personas_enabled", False) and cfg.get("workday_enabled", False):
         from hermes import personas as personas_mod
         from hermes import workday
-        catalog = personas_mod.load_all(project, cfg.get("persona_max_chars", 2000))
+        catalog = personas_mod.load_cast(project, cfg)
         p, rest, attempted = personas_mod.parse_invocation(prompt, catalog)
         if p is not None:
             print(dim(f"(speaking as {p.name} — pulled aside, no workday)"))
@@ -196,8 +196,7 @@ def _pick_persona(cfg, project, prompt, backend, spec):
     if not cfg.get("personas_enabled", False):
         return None, prompt
     from hermes import personas as personas_mod
-    max_chars = cfg.get("persona_max_chars", 2000)
-    catalog = personas_mod.load_all(project, max_chars)
+    catalog = personas_mod.load_cast(project, cfg)
     persona, prompt, attempted = personas_mod.parse_invocation(prompt, catalog)
     if persona is not None:
         print(dim(f"(speaking as {persona.name})"))
@@ -753,6 +752,47 @@ def cmd_days(cfg, args: str) -> None:
             print(f"  {cyan(p.stem)}  {dim(first[:100])}")
 
 
+def cmd_landmark(cfg, args: str) -> None:
+    """Landmarks (feature 13): marks on the road between lifecycles.
+      landmark                    list what stands on the road
+      landmark <name> <text...>   leave one — the next day's briefing must address it
+      landmark rm <name>          clear one yourself
+    """
+    from hermes import landmarks as landmarks_mod
+    project = _current_project(cfg)
+    if project is None:
+        print(yellow("no current project"))
+        return
+    parts = args.split(maxsplit=1)
+    if not parts:
+        marks = landmarks_mod.load(project)
+        if not marks:
+            print(dim("(the road is clear — `landmark <name> <text>` leaves one)"))
+        for m in marks:
+            print(f"  {cyan(m.name)}  {dim(m.summary[:100])}")
+        if not cfg.get("landmarks_enabled", False):
+            print(dim("(landmarks are off at runtime — "
+                      "`config set landmarks_enabled true` makes the briefing read them)"))
+        return
+    if parts[0] == "rm" and len(parts) > 1:
+        name = parts[1].strip()
+        if landmarks_mod.remove(project, name):
+            print(green(f"landmark '{name}' cleared."))
+        else:
+            print(red(f"no such landmark: {name}"))
+        return
+    if len(parts) < 2 or not parts[1].strip():
+        print(dim("usage: landmark <name> <text>  ·  landmark rm <name>  ·  landmark"))
+        return
+    try:
+        path = landmarks_mod.leave(project, parts[0], parts[1].strip())
+    except ValueError as e:
+        print(red(str(e)))
+        return
+    print(green(f"landmark '{parts[0]}' stands") + dim(f" at {path} — the next "
+                "day's briefing must address it"))
+
+
 def cmd_council(cfg, args: str) -> None:
     """Council mode (feature 10): the cast deliberates, the scribe writes.
       council <topic>              the loaded cast (up to 4) takes the topic
@@ -909,6 +949,7 @@ HELP = f"""\
 {cyan('personas')} [show|edit|use <name>]  the cast of archetypes ({cyan('run hey <name>, ...')} invokes one)
 {cyan('council')} <topic> [names]  the cast deliberates in a clocked circle; the scribe writes the outcome
 {cyan('days')} [show|log <id>]   the workday record — each `run` is a briefing→work→debrief day when on
+{cyan('landmark')} [<name> <text>|rm <name>]  marks on the road — the next briefing must address them
 {cyan('checkpoint')} [restore <id>]  project snapshots before file-mutating turns
 {cyan('tools')}                 list the agent's tools
 {cyan('gpu')} attach [sshstr] | serve | status | tunnel | down   {dim('(alias: g)')}
@@ -954,6 +995,8 @@ def dispatch(cfg, line: str) -> bool:
         cmd_council(cfg, rest)
     elif cmd in ("days", "day"):
         cmd_days(cfg, rest)
+    elif cmd in ("landmark", "landmarks"):
+        cmd_landmark(cfg, rest)
     elif cmd == "debug":
         cmd_debug(cfg, rest)
     elif cmd in ("checkpoint", "checkpoints"):

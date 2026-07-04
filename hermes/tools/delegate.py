@@ -57,8 +57,7 @@ def delegate(args, ctx):
             return ("ERROR: personas are disabled "
                     "(config set personas_enabled true).")
         from hermes import personas as personas_mod
-        max_chars = ctx.cfg.get("persona_max_chars", 2000)
-        catalog = personas_mod.load_all(ctx.project, max_chars)
+        catalog = personas_mod.load_cast(ctx.project, ctx.cfg)
         persona = personas_mod.resolve(catalog, pname)
         if persona is None:
             return (f"ERROR: no such persona '{pname}'. "

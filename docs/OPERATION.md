@@ -117,13 +117,16 @@ built in features 9–11 maps onto the operation model:
 - **Renames** (`project`→operation, `mission.md`→`strategy.md`, prompt→brief,
   `days/`→mission log) follow the house migration rule: silent migration,
   reversible, old layouts keep working.
-- **Organic identity**: per-character service record appended after each
-  mission, riding into that character's next system prompt — mechanism to be
-  designed on this sheet before any code.
-- **The Owl's handoff slot exists today** as `workday_supervisor`: every
-  worker that finishes reports off to the watching persona, who asks the
-  process question and can send the report back once. The full protocol slot
-  (briefing-side strategy check, veto vs. objection) waits on the sheets.
+- **Organic identity is built** (`service_records`, feature 12): one line
+  per run/day onto each character's jacket in `<project>/records/`, the tail
+  riding in its voice everywhere it speaks. Oldest days are forgotten first.
+- **Landmarks are built** (`landmarks_enabled`, feature 13): marks on the
+  road ride into every morning briefing, the room must address them, and
+  the night archives what the day attended.
+- **The Owl's handoff slot exists** as `workday_supervisor`: every worker
+  that finishes reports off to the watching persona, who asks the process
+  question and can send the report back. The remaining open protocol point
+  is veto vs. recorded objection at the briefing side.
 
 ## Open questions on the protocol
 

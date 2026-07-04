@@ -388,6 +388,17 @@ def run(project, prompt, cfg, backend, gpu=None, env=None, confirm_fn=None,
     (run_dir / "summary.md").write_text(summary + "\n")
     if final_text:
         (run_dir / "final.md").write_text(final_text + "\n")
+    # Service records (feature 12): a persona that worked a run is shaped by
+    # it — one line onto its jacket, riding into its future voices.
+    if persona is not None and cfg.get("service_records", False):
+        from hermes import personas as personas_mod
+        first = (summary or "").strip().splitlines()
+        personas_mod.append_record(
+            project, persona.name,
+            f"- run {run_id:04d}: \"{prompt.strip()[:80]}\" — "
+            + (first[0][:120] if first else "(no summary)"),
+            int(cfg.get("record_file_chars", 12000)),
+        )
     status = red("aborted") if aborted else green("complete")
     print(f"\n{dim(f'[run {run_id:04d}')} {status} {dim(f'— {turns} turn(s)]')}")
     return RunResult(run_id, summary, final_text, turns, aborted)

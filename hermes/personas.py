@@ -107,14 +107,77 @@ def _load_dir(d: Path, scope: str, max_chars: int) -> dict[str, Persona]:
     return out
 
 
-def load_all(project=None, max_chars: int = 2000) -> dict[str, Persona]:
+def load_all(project=None, max_chars: int = 2000,
+             record_chars: int = 0) -> dict[str, Persona]:
     """Every visible persona by name: builtin < global < project (the more
-    specific file shadows the shipped one of the same name)."""
+    specific file shadows the shipped one of the same name). With
+    `record_chars` > 0 each persona's service record in this operation rides
+    appended to its voice — identity accretes from what the character has
+    actually done (feature 12)."""
     cast = _load_dir(builtin_dir(), "builtin", max_chars)
     cast.update(_load_dir(global_dir(), "global", max_chars))
     if project is not None:
         cast.update(_load_dir(project.personas_dir, "project", max_chars))
+        if record_chars > 0:
+            for p in cast.values():
+                tail = record_tail(project, p.name, record_chars)
+                if tail:
+                    p.voice += (
+                        "\n\n### Your service record — this operation, most "
+                        "recent last\n" + tail
+                    )
     return cast
+
+
+def load_cast(project, cfg) -> dict[str, Persona]:
+    """The catalog as a run should see it: voices truncated to the config
+    budget, service records riding when the feature is on."""
+    record_chars = (int(cfg.get("record_prompt_chars", 1200))
+                    if cfg.get("service_records", False) else 0)
+    return load_all(project, cfg.get("persona_max_chars", 2000), record_chars)
+
+
+# ---- service records (feature 12): organic identity -------------------------
+def records_dir(project) -> Path:
+    return project.root / "records"
+
+
+def record_path(project, name: str) -> Path:
+    return records_dir(project) / f"{name}.md"
+
+
+def append_record(project, name: str, entry: str,
+                  keep_chars: int = 12000) -> None:
+    """One line onto a character's service jacket. The file stays bounded:
+    when it outgrows `keep_chars` the oldest days are forgotten first —
+    accretion with decay, like any identity."""
+    if not PERSONA_NAME_RE.match(name):
+        return
+    d = records_dir(project)
+    d.mkdir(parents=True, exist_ok=True)
+    path = record_path(project, name)
+    text = (path.read_text() if path.exists() else "")
+    text = (text.rstrip() + "\n" if text.strip() else "") + entry.strip() + "\n"
+    if len(text) > max(1000, keep_chars):
+        cut = text[-keep_chars:]
+        nl = cut.find("\n")
+        text = "(older days forgotten)\n" + (cut[nl + 1:] if nl >= 0 else cut)
+    path.write_text(text)
+
+
+def record_tail(project, name: str, max_chars: int) -> str:
+    path = record_path(project, name)
+    if not path.exists():
+        return ""
+    try:
+        text = path.read_text().strip()
+    except OSError:
+        return ""
+    if len(text) > max_chars:
+        cut = text[-max_chars:]
+        nl = cut.find("\n")
+        text = "(...)\n" + (cut[nl + 1:] if nl >= 0 else cut)
+    return text
 
 
 def resolve(catalog: dict[str, Persona], name: str) -> Persona | None:

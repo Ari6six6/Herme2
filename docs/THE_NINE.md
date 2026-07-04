@@ -192,7 +192,8 @@ config keys). The mapping:
 | Baldur's death | nightfall = all workers reported, logged with its reason; `workday_max_seconds` is the backstop |
 | the domain admin's closing | `prompts/domain_admin.md`: the debrief that is the operator's reply AND the successor's briefing |
 | the rooms' staff | `workday_room` (default odin,owl,hawk) — workers dispatch from the whole catalog, the rooms stay small |
-| landmarks | known paths where lifecycles meet: `days/`, `runs/`, `notes.md`, the reports in the day log |
+| landmarks | the formal rendezvous (`landmarks_enabled`): marks on the road in `<project>/landmarks/`, read into every morning briefing (the room must address them), archived by the night into `.attended/`; workers leave them mid-mission with `leave_landmark` |
+| organic identity | service records (`service_records`): one line per run/day onto `<project>/records/<name>.md`, the tail riding in that character's voice everywhere it speaks — identity accretes from the record and forgets its oldest days first |
 | central vs base file system | project root (harness-managed, confirm-gated) vs `workspace/` (the agents' read/write ground) |
 
 ## Settled by the operator (2026-07-04) — and built

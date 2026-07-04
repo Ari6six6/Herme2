@@ -399,6 +399,58 @@ Cost: a default day with the 4-persona cast is 4 briefing + 1 foreman +
 a long run, and trim rounds/workers on slow boxes. `days` lists the record;
 `days show 0003` prints a debrief; `days log 0003` prints the whole day.
 
+### Feature 12 — Service records (organic identity)
+
+What a character does accretes into who it is. Every run a persona works and
+every workday it serves adds **one line to its jacket** —
+`<project>/records/<name>.md` — and the tail of that jacket rides appended
+to its voice *everywhere it speaks*: seam-A runs, delegate children, the
+workday's rooms and offices, councils. A character that keeps getting sent
+after the parser *becomes* the one who knows the parser; identity emerges
+from the record, not from editing the sheet.
+
+Who writes: workers get their assignment + outcome (a fallen worker's line
+says `FELL:`, a bounced one says `[sent back by the watcher]`); the watcher,
+the courier and the general get one line per day served; a `hey <name>` run
+writes the task + summary. The jacket is bounded (`record_file_chars`) and
+forgets its **oldest** days first — accretion with decay, like any identity.
+The prompt tail is budgeted separately (`record_prompt_chars`, ~300 tokens).
+
+| Flag | Default | Effect |
+|---|---|---|
+| `service_records` | `false` | write jackets + ride their tails in every voice |
+| `record_prompt_chars` | `1200` | jacket tail that rides in the prompt |
+| `record_file_chars` | `12000` | jacket cap on disk; oldest days forgotten first |
+
+Plain files: `nano records/owl.md` edits a character's past directly, and
+deleting the file is a clean amnesia. Off = zero writes, voices byte-identical.
+
+### Feature 13 — Landmarks (the rendezvous)
+
+Characters with different lifecycles can't call each other — a short life
+and a long life are rarely awake at the same moment — so they meet at
+marks. A landmark is one markdown file in `<project>/landmarks/` (first
+line = summary). Anyone can leave one:
+
+- **you**, from the REPL: `landmark flapping-tunnel the tunnel dies at dawn, look into it`
+- **a worker mid-mission**, with the `leave_landmark` tool — a dying child's
+  note to tomorrow: a lead it couldn't chase, a danger it saw.
+
+The protocol is the obligation on the other side: every **morning briefing
+reads the standing marks into the day's papers** (Odin cuts assignments with
+them in view) and the room must address them. A mark seen by a day is
+attended by it: the night archives it under the day's name in
+`landmarks/.attended/` and clears the road. Marks left *during* a day stand
+for the next one — that's the point: they cross the night.
+
+| Flag | Default | Effect |
+|---|---|---|
+| `landmarks_enabled` | `false` | briefing reads the road + night sweep + the `leave_landmark` tool |
+
+`landmark` lists the road; `landmark rm <name>` clears one by hand. The CLI
+works even with the flag off (they're plain files); the flag governs the
+runtime protocol.
+
 ## Static package budget (measured, 60K box)
 
 Keep an eye on the fixed block — it's sent on every single call:
@@ -452,5 +504,6 @@ what it was before. Nothing here changes on-disk formats without silent migratio
 | `personas [show\|edit\|use <name>]` | list the cast / read / nano / set the default voice |
 | `council <topic> [names]` | convene the cast on a topic; the scribe writes the outcome |
 | `days [show\|log <id>]` | the workday record — debriefs and full day logs |
+| `landmark [<name> <text>\|rm <name>]` | leave / list / clear marks on the road between days |
 | `checkpoint [restore <id>]` | list project snapshots / revert to one |
 | `debug prefix` | measure the byte prefix two consecutive packages share |

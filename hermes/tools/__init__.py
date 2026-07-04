@@ -207,6 +207,14 @@ def build_registry(project, cfg, confirm_fn) -> ToolRegistry:
         for t in delegate_tools.TOOLS:
             registry.register(t)
 
+    # Landmarks (feature 13): the rendezvous note — how a short life speaks
+    # to a longer one. A plain file in the project, so it rides free.
+    if cfg.get("landmarks_enabled", False):
+        from hermes.tools import landmark as landmark_tools
+
+        for t in landmark_tools.TOOLS:
+            registry.register(t)
+
     # Host tools only exist when the operator has registered a server —
     # no schema bloat for setups that never use them.
     if hosts_mod.load_hosts():

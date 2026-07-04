@@ -85,6 +85,16 @@ DEFAULTS: dict = {
     "workday_room": "odin,owl,hawk",  # the staff in the rooms ("" = whole cast, capped)
     "workday_courier": "sveja",  # delivers each report to the record ("" = none)
     "workday_general": "hawk",  # calls the roster at nightfall ("" = none)
+    # Service records (feature 12): organic identity. What a character does
+    # accretes into who it is — one line per run/day onto its jacket, the
+    # tail riding in its voice everywhere it speaks.
+    "service_records": False,
+    "record_prompt_chars": 1200,  # tail of the jacket that rides in the voice
+    "record_file_chars": 12000,  # jacket cap; the oldest days are forgotten first
+    # Landmarks (feature 13): the rendezvous between lifecycles. Marks left on
+    # the road ride into every morning briefing, which must address them; the
+    # night archives what the day attended. Also registers leave_landmark.
+    "landmarks_enabled": False,
     # Prefix-cache-friendly package ordering (feature 5): move volatile runtime
     # status (date, GPU, hosts) out of the stable header so the header + persona
     # + tools + skills index stay a byte-identical prefix for vLLM prefix caching.
