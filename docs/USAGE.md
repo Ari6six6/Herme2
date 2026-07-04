@@ -346,15 +346,24 @@ against the **global mission**, and the day runs a fixed protocol:
    tool posture and `workday_worker_turns` cap. Same registry, same confirm
    gates, same taint rail: the day changes *who* works, never what work is
    allowed to touch.
-4. **Evening debrief** — the cast convenes again over the reports and calls out
-   anything dressed up; the **scribe** writes the day up: What happened /
-   Mission status / Open items / Tomorrow.
-5. **Escalation and carryover** — the debrief is the reply you read, it becomes
+4. **The handoff** — a finished worker doesn't vanish into the evening pile:
+   it reports off to the **watcher** (`workday_supervisor`, the owl by
+   default), one completion asking the process question — did they do the
+   thing, or talk about the thing? — ending `HANDOFF: ACCEPT` or
+   `HANDOFF: REWORK: <what to fix>`. A sent-back worker gets up to
+   `workday_rework_rounds` more passes with the objection in hand, and the
+   whole trail rides into the debrief on the record. Fails open: no watcher
+   on shift, an unreachable one, or no verdict line files the report as-is;
+   nobody referees their own work.
+5. **Evening debrief** — the cast convenes again over the reports (handoff
+   trails included) and calls out anything dressed up; the **scribe** writes
+   the day up: What happened / Mission status / Open items / Tomorrow.
+6. **Escalation and carryover** — the debrief is the reply you read, it becomes
    the run's summary (so ordinary future packages inherit it), it's written to
    `<project>/days/NNNN-<slug>.md` (full room-by-room record in
    `NNNN-<slug>.log.md`), and the **next** day's briefing opens with it. Days
    chain: task → work → debrief → tomorrow's briefing.
-6. **The harvest** (the self-improvement loop) — with `skills_enabled` on, a
+7. **The harvest** (the self-improvement loop) — with `skills_enabled` on, a
    final bounded pass with ONLY the skills tools banks what the day taught as
    skills, so tomorrow's shift doesn't relearn it.
 
@@ -372,6 +381,8 @@ straight to the debrief — you always get the write-up.
 | `workday_debrief_rounds` | `1` | evening room passes (0 = skip the room) |
 | `workday_max_seconds` | `1800` | the day clock |
 | `workday_skill_harvest` | `true` | bank lessons as skills (bites only with `skills_enabled`) |
+| `workday_supervisor` | `"owl"` | the watcher finished workers report off to (`""` = none) |
+| `workday_rework_rounds` | `1` | times the watcher may send a report back |
 
 Cost: a default day with the 4-persona cast is 4 briefing + 1 foreman +
 (workers × their turns) + 4 debrief + 1 scribe completions — budget a day like

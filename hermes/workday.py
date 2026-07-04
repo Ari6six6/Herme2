@@ -37,9 +37,10 @@ from hermes import subagent
 from hermes.llm import LLMTransportError
 from hermes.tools import ToolRegistry, build_registry
 from hermes.tools.base import ToolContext
-from hermes.ui import cyan, dim, green, magenta
+from hermes.ui import cyan, dim, green, magenta, yellow
 
 ASSIGNMENT_RE = re.compile(r"^ASSIGNMENT:\s*([A-Za-z0-9_-]+)\s*:\s*(.+)$", re.M)
+HANDOFF_RE = re.compile(r"HANDOFF:\s*(ACCEPT|REWORK)(?:\s*:\s*(.+))?", re.I)
 _SLUG_RE = re.compile(r"[^a-z0-9]+")
 _ID_RE = re.compile(r"^(\d{4})-")
 CAST_MAX = 4  # personas on shift — same cap as a council convening
@@ -244,12 +245,80 @@ def run_day(project, task, cfg, backend, gpu=None, env=None, confirm_fn=None,
     ctx.registry = registry
     ctx._delegate_log = log
 
-    reports: list[tuple[str, str, str]] = []  # (persona, brief, conclusion)
+    # The watcher (the handoff supervisor): every worker that finishes reports
+    # off to this persona, who asks the process question and may send the
+    # report back. Fails open — no watcher on shift means reports file as-is.
+    sup_name = str(cfg.get("workday_supervisor", "owl") or "").strip()
+    sup = (personas_mod.resolve({p.name: p for p in cast}, sup_name)
+           if sup_name else None)
+
+    def _handoff_verdict(worker, brief, report):
+        """One completion, no tools: the watcher reads the report and rules.
+        Any failure — dead backend, no verdict line — accepts the report."""
+        nonlocal calls
+        system = package.render(package.supervisor_prompt(), {
+            "name": sup.name, "voice": sup.voice,
+        })
+        user = (
+            "# TODAY'S TASK\n" + task.strip()
+            + f"\n\n# THE ASSIGNMENT ({worker.name})\n" + brief
+            + "\n\n# THE WORKER'S REPORT (they just finished and reported off)\n"
+            + package.truncate_keep_tail(report, room_budget)
+        )
+        try:
+            result = backend.chat([
+                {"role": "system", "content": system},
+                {"role": "user", "content": user},
+            ])
+        except LLMTransportError:
+            return "ACCEPT", "(the watcher could not be reached — filed as-is)"
+        calls += 1
+        found = HANDOFF_RE.findall(_shown(result.content) or "")
+        if not found:
+            return "ACCEPT", "(no verdict from the watcher — filed as-is)"
+        verdict, note = found[-1]  # last match wins, like every verdict rail
+        return verdict.upper(), (note or "").strip()
+
+    def _supervise(worker, brief, report, worker_brief):
+        """The handoff loop: verdict, then at most workday_rework_rounds
+        send-backs. Returns (final report, the trail for the record)."""
+        events = []
+        reworks_left = max(0, int(cfg.get("workday_rework_rounds", 1)))
+        while True:
+            verdict, note = _handoff_verdict(worker, brief, report)
+            log({"role": "handoff", "name": worker.name,
+                 "content": f"{sup.name}: {verdict}" + (f": {note}" if note else "")})
+            if verdict != "REWORK":
+                events.append(note or "accepted")
+                print(dim(f"  handoff {worker.name} → {sup.name}: ")
+                      + green("accepted"))
+                break
+            if reworks_left <= 0 or time.monotonic() - start > clock:
+                events.append(f"sent back ({note}) — no rework left, filed as-is")
+                print(dim(f"  handoff {worker.name} → {sup.name}: ")
+                      + yellow("sent back, out of rework — filed as-is"))
+                break
+            reworks_left -= 1
+            events.append(f"sent back: {note}")
+            print(dim(f"  handoff {worker.name} → {sup.name}: ")
+                  + yellow(f"sent back — {note[:80]}"))
+            rework_brief = (
+                worker_brief
+                + "\n\nYour previous report:\n" + report
+                + f"\n\nThe watcher ({sup.name}) sent it back: {note}\n"
+                "Address exactly that objection and file a corrected conclusion."
+            )
+            report = subagent.run_child(ctx, rework_brief, [], cfg, log=log,
+                                        persona=worker, max_turns=worker_turns)
+            log({"role": "report", "name": worker.name, "content": report})
+        return report, f"{sup.name}: " + "; ".join(events)
+
+    reports: list[tuple[str, str, str, str]] = []  # (persona, brief, conclusion, trail)
     worker_turns = cfg.get("workday_worker_turns", 14)
     for p, brief in assignments:
         if time.monotonic() - start > clock:
             reports.append((p.name, brief, "(skipped — the day's clock ran out "
-                                           "before this assignment started)"))
+                                           "before this assignment started)", ""))
             continue
         worker_brief = (
             f"Today's operator task:\n{task.strip()}\n\n"
@@ -261,13 +330,17 @@ def run_day(project, task, cfg, backend, gpu=None, env=None, confirm_fn=None,
         print(dim(f"  {p.name} clocks in"))
         out = subagent.run_child(ctx, worker_brief, [], cfg, log=log,
                                  persona=p, max_turns=worker_turns)
-        reports.append((p.name, brief, out))
         log({"role": "report", "name": p.name, "content": out})
+        trail = ""
+        if sup is not None and sup.name != p.name:  # no one referees their own work
+            out, trail = _supervise(p, brief, out, worker_brief)
+        reports.append((p.name, brief, out, trail))
 
     # ---- evening debrief ----------------------------------------------------
     reports_block = "\n\n".join(
         f"## {name} — assignment: {brief}\n\n{out}"
-        for name, brief, out in reports
+        + (f"\n\n[handoff — {trail}]" if trail else "")
+        for name, brief, out, trail in reports
     )
     evening_papers = (
         "# TODAY'S TASK (from the operator)\n" + task.strip()
@@ -304,7 +377,7 @@ def run_day(project, task, cfg, backend, gpu=None, env=None, confirm_fn=None,
     d = days_dir(project)
     d.mkdir(parents=True, exist_ok=True)
     base = f"{_next_id(d):04d}-{_slug(task)}"
-    worked = ", ".join(f"{name} ({brief[:40]})" for name, brief, _ in reports)
+    worked = ", ".join(f"{name} ({brief[:40]})" for name, brief, _, _ in reports)
     meta = (f"# Day {base} — {task.strip()}\n\n"
             f"Cast: {', '.join(p.name for p in cast)} · worked: {worked}\n")
     (d / f"{base}.md").write_text(meta + "\n" + debrief.rstrip() + "\n")
@@ -322,7 +395,7 @@ def run_day(project, task, cfg, backend, gpu=None, env=None, confirm_fn=None,
 
     summary = package.truncate_keep_head(
         f"Workday {base}. Reports from: "
-        + ", ".join(name for name, _, _ in reports) + ".\n\n" + debrief, 1200
+        + ", ".join(name for name, _, _, _ in reports) + ".\n\n" + debrief, 1200
     )
     (run_dir / "summary.md").write_text(summary + "\n")
     (run_dir / "final.md").write_text(debrief + "\n")

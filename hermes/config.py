@@ -80,6 +80,8 @@ DEFAULTS: dict = {
     "workday_debrief_rounds": 1,  # round-robin passes in the evening room (0 = skip)
     "workday_max_seconds": 1800,  # day clock; on expiry, straight to the debrief
     "workday_skill_harvest": True,  # bank the day's lessons as skills (needs skills_enabled)
+    "workday_supervisor": "owl",  # every finished worker reports off to this persona ("" = none)
+    "workday_rework_rounds": 1,  # times the watcher may send a report back
     # Prefix-cache-friendly package ordering (feature 5): move volatile runtime
     # status (date, GPU, hosts) out of the stable header so the header + persona
     # + tools + skills index stay a byte-identical prefix for vLLM prefix caching.

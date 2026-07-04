@@ -211,6 +211,106 @@ def test_rooms_zero_rounds_are_skipped(project, cfg, duo):
     assert len(backend.calls) == 4  # no room chatter at all
 
 
+# ---- the handoff: finished workers report off to the watcher ---------------------
+FOREMAN_BETA = "The split:\nASSIGNMENT: beta: fix the parser"
+
+
+def _supervised_day_script(handoff_turns):
+    """A day where only beta works and alpha watches the handoff."""
+    return ([_say("alpha's morning view"), _say("beta's morning view"),
+             _say(FOREMAN_BETA),
+             _call("finish_run", {"summary": "BETA v1: fixed it, ran clean"})]
+            + handoff_turns
+            + [_say("alpha's evening take"), _say("beta's evening take"),
+               _say(DEBRIEF_DOC)])
+
+
+def test_handoff_accept_goes_on_the_record(project, cfg, duo):
+    cfg.set("workday_supervisor", "alpha")
+    backend = ScriptBackend(_supervised_day_script(
+        [_say("evidence is real.\nHANDOFF: ACCEPT")]))
+    _run_day(project, cfg, backend)
+    # the watcher was pinged with the worker's report, speaking as alpha
+    sup_call = backend.calls[4]
+    assert "You are Alpha, the analyst." in sup_call[0]["content"]
+    assert "BETA v1" in sup_call[1]["content"]
+    assert "fix the parser" in sup_call[1]["content"]
+    log = (workday.days_dir(project) / "0001-sort-out-the-parser.log.md").read_text()
+    assert "[handoff — alpha: accepted]" in log
+    lines = [json.loads(l) for l in
+             (project.runs_dir / "0001" / "transcript.jsonl").read_text().splitlines()]
+    assert any(e["role"] == "handoff" and "ACCEPT" in e["content"] for e in lines)
+
+
+def test_handoff_rework_then_accept(project, cfg, duo):
+    cfg.set("workday_supervisor", "alpha")
+    backend = ScriptBackend([
+        _say("a"), _say("b"), _say(FOREMAN_BETA),
+        _call("finish_run", {"summary": "BETA v1: claims, nothing run"}),
+        _say("HANDOFF: REWORK: actually run it and quote the output"),
+        _call("finish_run", {"summary": "BETA v2: ran it, output quoted"}),
+        _say("HANDOFF: ACCEPT"),
+        _say("a2"), _say("b2"), _say(DEBRIEF_DOC),
+    ])
+    _run_day(project, cfg, backend)
+    # the sent-back worker saw its old report and the watcher's objection
+    rework_call = backend.calls[5]
+    assert "BETA v1" in rework_call[1]["content"]
+    assert "sent it back: actually run it" in rework_call[1]["content"]
+    assert rework_call[0]["content"].startswith("You are a SUB-AGENT")
+    log = (workday.days_dir(project) / "0001-sort-out-the-parser.log.md").read_text()
+    assert "BETA v2" in log  # the record carries the corrected report
+    assert "[handoff — alpha: sent back: actually run it and quote the output; " \
+           "accepted]" in log
+
+
+def test_handoff_rework_cap_files_as_is(project, cfg, duo):
+    cfg.set("workday_supervisor", "alpha")
+    cfg.set("workday_rework_rounds", 0)
+    backend = ScriptBackend(_supervised_day_script(
+        [_say("HANDOFF: REWORK: not good enough")]))
+    _run_day(project, cfg, backend)
+    log = (workday.days_dir(project) / "0001-sort-out-the-parser.log.md").read_text()
+    assert "no rework left, filed as-is" in log
+    assert "BETA v1" in log  # the report still made the record
+    assert len(backend.calls) == 8  # exactly one worker run, no rework
+
+
+def test_handoff_watcher_unreachable_fails_open(project, cfg, duo):
+    cfg.set("workday_supervisor", "alpha")
+    backend = ScriptBackend(_supervised_day_script(
+        [LLMTransportError("watcher endpoint down")]))
+    result = _run_day(project, cfg, backend)
+    assert "Alpha audited, Beta fixed." in result.final_text
+    log = (workday.days_dir(project) / "0001-sort-out-the-parser.log.md").read_text()
+    assert "could not be reached — filed as-is" in log
+
+
+def test_handoff_no_verdict_fails_open(project, cfg, duo):
+    cfg.set("workday_supervisor", "alpha")
+    backend = ScriptBackend(_supervised_day_script(
+        [_say("I have opinions but forget the format")]))
+    _run_day(project, cfg, backend)
+    log = (workday.days_dir(project) / "0001-sort-out-the-parser.log.md").read_text()
+    assert "no verdict from the watcher — filed as-is" in log
+
+
+def test_watcher_never_referees_own_work(project, cfg, duo):
+    # foreman flops -> the whole task falls to beta, who IS the watcher:
+    # no self-handoff may happen.
+    cfg.set("workday_supervisor", "beta")
+    backend = ScriptBackend([
+        _say("a"), _say("b"), _say("no format here"),
+        _call("finish_run", {"summary": "BETA REPORT: did the whole task"}),
+        _say("a2"), _say("b2"), _say(DEBRIEF_DOC),
+    ])
+    _run_day(project, cfg, backend)
+    assert len(backend.calls) == 7  # no handoff completion anywhere
+    lines = [json.loads(l) for l in
+             (project.runs_dir / "0001" / "transcript.jsonl").read_text().splitlines()]
+    assert not any(e["role"] == "handoff" for e in lines)
+
+
 # ---- the harvest: lessons become skills ------------------------------------------
 def test_harvest_banks_a_skill_when_skills_are_on(project, cfg, duo):
     cfg.set("skills_enabled", True)

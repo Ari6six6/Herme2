@@ -289,6 +289,10 @@ def harvest_prompt() -> str:
     return _template("harvest.md").strip()
 
 
+def supervisor_prompt() -> str:
+    return _template("supervisor.md")
+
+
 def verify_before_done_nudge() -> str:
     return _template("verify_before_done.md").strip()
 
