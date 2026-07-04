@@ -31,16 +31,20 @@ The operation model differentiates by *concern*:
   (a service record appended per character, mechanism TBD). The sheet below
   is the seed, not the whole character.
 
-## Terminology (military)
+## Terminology — SETTLED (2026-07-04): no renames
 
-| Old (current code) | New (operation model) |
+The operator waved the renames off ("that's just naming conventions at this
+point — let's keep it project"). Filenames and commands stay as they are;
+what changed is the **nature** of the pieces:
+
+| Piece | Its settled nature |
 |---|---|
-| project | **operation** |
-| `mission.md` (standing, operator-owned) | **`strategy.md`** — the long game; the operator keeps an eye on it, the assistant knows it |
-| the prompt | **the brief** — the operator's morning order |
-| one prompt = one run = one loop | **one mission = one day in the room** |
-| run summary / day debrief | **debrief** — each character files one; the assistant's debrief to the operator summarizes them |
-| `days/` record | the operation's **mission log** |
+| project | stays `project` — the realm the domain admin represents |
+| `mission.md` | keeps its filename, but it IS **the strategy**: the domain admin talking to himself across the nights. `workday_amend_strategy` lets him amend it at the close (fails closed; the day log keeps the prior text) |
+| the prompt | **the brief — the comet's artifact**: from the domain admin's view the operator passes through like a comet, and the prompt is what the passage leaves behind |
+| one prompt = one run = one loop | one **day** in the room — one life of the domain admin |
+| the day's write-up | the **debrief** — the operator's reply AND the successor's briefing |
+| `days/` | the day log, chaining the lives |
 
 One mission = one day = one loop = one package = one prompt. The **room** is
 where the cast sits and works, morning to evening — their whole lifecycle,

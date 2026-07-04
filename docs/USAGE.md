@@ -393,6 +393,7 @@ straight to the debrief — you always get the write-up.
 | `workday_room` | `"odin,owl,hawk"` | the staff in the rooms (`""` = whole cast, capped) |
 | `workday_courier` | `"sveja"` | delivers each report to the record (`""` = none) |
 | `workday_general` | `"hawk"` | calls the roster at nightfall (`""` = none) |
+| `workday_amend_strategy` | `false` | at the close, the domain admin may amend `mission.md` — the strategy is him talking to himself across the nights. Fails closed (only an explicit `BEGIN STRATEGY … END STRATEGY` block rewrites); the day log keeps the text as it stood before |
 
 Cost: a default day with the 4-persona cast is 4 briefing + 1 foreman +
 (workers × their turns) + 4 debrief + 1 scribe completions — budget a day like

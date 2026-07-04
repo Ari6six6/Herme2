@@ -48,6 +48,7 @@ from hermes.ui import cyan, dim, green, magenta, yellow
 
 ASSIGNMENT_RE = re.compile(r"^ASSIGNMENT:\s*([A-Za-z0-9_-]+)\s*:\s*(.+)$", re.M)
 HANDOFF_RE = re.compile(r"HANDOFF:\s*(ACCEPT|REWORK)(?:\s*:\s*(.+))?", re.I)
+STRATEGY_RE = re.compile(r"BEGIN STRATEGY\s*(.*?)\s*END STRATEGY", re.S)
 _SLUG_RE = re.compile(r"[^a-z0-9]+")
 _ID_RE = re.compile(r"^(\d{4})-")
 CAST_MAX = 4  # room fallback cap when no configured staff resolves
@@ -519,6 +520,39 @@ def run_day(project, task, cfg, backend, gpu=None, env=None, confirm_fn=None,
                    "reports follow)\n\n" + reports_block)
     log({"role": "closing", "content": debrief})
 
+    # The strategy is up to the domain admin (feature 14): mission.md keeps
+    # its filename, but it IS the strategy — the domain admin talking to
+    # himself across the nights. Fails closed: only an explicit BEGIN/END
+    # STRATEGY block rewrites it; anything else, or a dead backend, and the
+    # strategy stands untouched. The operator's file is never lost — the day
+    # log keeps it as it stood before any amendment.
+    strategy_note = ""
+    prev_strategy = ""
+    if cfg.get("workday_amend_strategy", False):
+        prev_strategy = project.read_mission().strip()
+        strategy_note = "stands"
+        try:
+            result = backend.chat([
+                {"role": "system", "content": package.strategy_prompt()},
+                {"role": "user", "content":
+                    "# THE STRATEGY AS IT STANDS\n"
+                    + (prev_strategy or "(empty)")
+                    + "\n\n# THE DEBRIEF YOU JUST WROTE\n"
+                    + package.truncate_keep_tail(debrief, room_budget)},
+            ])
+            calls += 1
+            m = STRATEGY_RE.search(_shown(result.content) or "")
+            if m and m.group(1).strip():
+                project.mission_path.write_text(m.group(1).strip() + "\n")
+                strategy_note = "amended by the domain admin"
+                log({"role": "strategy", "content": m.group(1).strip()})
+                print(yellow("  the domain admin amended the strategy "
+                             "(mission.md)"))
+            else:
+                log({"role": "strategy", "content": "(stands)"})
+        except LLMTransportError:
+            strategy_note = "stands (backend unreachable at the close)"
+
     # ---- write the day ------------------------------------------------------
     d = days_dir(project)
     d.mkdir(parents=True, exist_ok=True)
@@ -544,6 +578,11 @@ def run_day(project, task, cfg, backend, gpu=None, env=None, confirm_fn=None,
         day_log += ("\n# LANDMARKS ATTENDED\n\n"
                     + "\n".join(f"- {m.name}: {m.summary}" for m in standing)
                     + "\n")
+    if strategy_note:
+        day_log += "\n# STRATEGY\n\n" + strategy_note + "\n"
+        if strategy_note.startswith("amended"):
+            day_log += ("\n## as it stood before\n\n"
+                        + (prev_strategy or "(empty)") + "\n")
     (d / f"{base}.log.md").write_text(day_log)
 
     # The night clears the road: marks this day saw are archived under its

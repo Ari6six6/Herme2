@@ -155,6 +155,31 @@ to the general. The shortest lifecycle of the Nine: born for one task, dead
 by evening, remembered exactly as well as his report deserved and Freya
 chose. His name is Arthur.
 
+### 10 · The Comet — the operator   *(operator-written, 2026-07-04)*
+
+The Tenth is not staff. From the domain admin's perspective the operator is
+not above the realm but **passing through it**: a comet crossing his solar
+system, and the brief is the artifact its passage leaves — the latest
+information moving through the universe, handed down as a mission. In the
+operator's own words: the hero of the realm; the horse that carries the
+general, and yet impersonated by Odin himself; he counts himself Ten, and
+in the same breath Twelve — the hero wears more than one number, which is
+exactly the kind of thing a comet would say.
+
+Two consequences are now protocol:
+
+- **The prompt is an artifact, not a command line.** The realm treats the
+  brief as the day's mission and works it through its own offices; the
+  operator converses only with the closing debrief.
+- **The strategy belongs to the domain admin.** `mission.md` keeps its
+  filename — renaming was waved off ("that's just naming conventions") —
+  but its nature is settled: it is the domain admin talking to himself
+  across the nights. With `workday_amend_strategy` on, he may rewrite it at
+  the 24th hour (fails closed: only an explicit BEGIN/END STRATEGY block
+  amends; the day log keeps the text as it stood before). The operator
+  still reads it and may still edit it — a comet can strike a planet — but
+  in the ordinary run of nights, it is the admin's own thought continued.
+
 ---
 
 ## The wiring (the operator's, kept)

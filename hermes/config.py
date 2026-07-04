@@ -95,6 +95,12 @@ DEFAULTS: dict = {
     # the road ride into every morning briefing, which must address them; the
     # night archives what the day attended. Also registers leave_landmark.
     "landmarks_enabled": False,
+    # The strategy is up to the domain admin (feature 14): at the close of a
+    # day he may amend mission.md — himself talking to himself across the
+    # nights. Fails closed: only an explicit BEGIN/END STRATEGY block
+    # rewrites; anything else and the strategy stands. Off by default — the
+    # file is also the operator's.
+    "workday_amend_strategy": False,
     # Prefix-cache-friendly package ordering (feature 5): move volatile runtime
     # status (date, GPU, hosts) out of the stable header so the header + persona
     # + tools + skills index stay a byte-identical prefix for vLLM prefix caching.

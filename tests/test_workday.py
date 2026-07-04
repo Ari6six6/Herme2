@@ -444,6 +444,54 @@ def test_harvest_tools_are_skills_only(project, cfg, duo):
     assert seen["tools"] == ["load_skill", "write_skill"]
 
 
+# ---- the strategy is up to the domain admin (feature 14) --------------------------
+def test_strategy_stands(project, cfg, duo):
+    cfg.set("workday_amend_strategy", True)
+    before = project.read_mission()
+    backend = ScriptBackend(_full_day_script() + [_say("STRATEGY: STANDS")])
+    _run_day(project, cfg, backend)
+    assert project.read_mission() == before  # untouched
+    log = (workday.days_dir(project) / "0001-sort-out-the-parser.log.md").read_text()
+    assert "# STRATEGY\n\nstands" in log
+
+
+def test_strategy_amended_with_old_text_on_the_record(project, cfg, duo):
+    cfg.set("workday_amend_strategy", True)
+    project.mission_path.write_text("Old course: patch forever.\n")
+    backend = ScriptBackend(_full_day_script() + [_say(
+        "Today changed the direction.\n"
+        "BEGIN STRATEGY\nNew course: rewrite the parser, ship by winter.\n"
+        "END STRATEGY")])
+    _run_day(project, cfg, backend)
+    assert project.read_mission() == ("New course: rewrite the parser, "
+                                      "ship by winter.\n")
+    log = (workday.days_dir(project) / "0001-sort-out-the-parser.log.md").read_text()
+    assert "amended by the domain admin" in log
+    assert "Old course: patch forever." in log  # never lost
+    lines = [json.loads(l) for l in
+             (project.runs_dir / "0001" / "transcript.jsonl").read_text().splitlines()]
+    assert any(e["role"] == "strategy" and "New course" in e["content"]
+               for e in lines)
+
+
+def test_strategy_fails_closed_on_garbage_and_empty_blocks(project, cfg, duo):
+    cfg.set("workday_amend_strategy", True)
+    before = project.read_mission()
+    for reply in ("I feel like changing everything!!",
+                  "BEGIN STRATEGY\n\nEND STRATEGY"):
+        backend = ScriptBackend(_full_day_script() + [_say(reply)])
+        _run_day(project, cfg, backend)
+        assert project.read_mission() == before
+
+
+def test_strategy_off_costs_nothing(project, cfg, duo):
+    backend = ScriptBackend(_full_day_script())
+    _run_day(project, cfg, backend)
+    assert backend.turns == []  # no closing amendment call
+    log = (workday.days_dir(project) / "0001-sort-out-the-parser.log.md").read_text()
+    assert "# STRATEGY" not in log
+
+
 # ---- the record ------------------------------------------------------------------
 def test_list_days_and_latest_debrief(project, cfg, duo):
     assert workday.list_days(project) == []
