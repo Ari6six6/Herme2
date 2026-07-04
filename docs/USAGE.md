@@ -354,6 +354,44 @@ doesn't get cut off mid-task, set `max_run_seconds` (and, if delegation is on,
 meaning much once turns are cheap and the model is fast; time is what's
 actually metered on the box you're renting.
 
+### Feature 9 — Retrospection (cross-run self-improvement)
+
+The skills nudge reflects on one run while it's still in context. Retrospection
+is the layer above it: every N runs, a fresh-context side-pass reads the last
+few runs *side by side* and asks one question — what keeps going wrong? — then
+banks the answer where future packages will actually see it.
+
+What it reads is **harness ground truth**, not the model's memory of events:
+every run (flag or no flag) the harness writes `runs/NNNN/metrics.json` with
+what it counted while running the loop — turns, aborted or not, tool errors,
+stall nudges, phantom bounces, verification bounces/failures, tainted turns.
+The doer doesn't grade its own homework; the reflection pass reasons over
+numbers it can't embellish, plus the run summaries.
+
+What it can write is deliberately narrow — the agent's own assets, nothing
+else: `write_note` always, and `load_skill`/`write_skill` only when the skills
+system is on (a skill written into a system that never indexes it would be a
+false improvement). No shells, no network, no mission/persona/directives.
+Notes land in every future package and skills land in the index — that
+recirculation is what makes the improvement recursive.
+
+| Flag | Default | Effect |
+|---|---|---|
+| `retrospect_enabled` | `false` | run the self-review pass automatically every N runs |
+| `retrospect_every_runs` | `5` | how often (stateless `run_id % N`, like reconciliation) |
+| `retrospect_window` | `10` | how many recent runs one pass reviews |
+| `retrospect_max_turns` | `4` | tool-call budget for one pass |
+
+The pass needs at least 2 measured runs (one run has no pattern in it), never
+raises (a failed pass is a no-op), and costs one side-conversation of a few
+turns every Nth run. `retrospect` in the REPL shows the recorded metrics;
+`retrospect now` forces a pass without waiting for the schedule.
+
+**Recommended for a 60K deployment:** turn it on alongside
+`skills_enabled`/`skills_nudge` — notes catch the facts, skills catch the
+procedures, and the metrics tell you (and it) whether runs are actually
+getting smoother.
+
 ## Static package budget (measured, 60K box)
 
 Keep an eye on the fixed block — it's sent on every single call:
@@ -385,6 +423,7 @@ skills_nudge           true     # let the agent grow them
 delegate_enabled       true     # offload big sub-tasks to a clean child
 prefix_cache_order     true     # cheaper calls if the server caches prefixes
 verify_before_done     true     # don't report done without running it
+retrospect_enabled     true     # cross-run self-review every 5 runs
 # on already, leave them: checkpointing, directive_header_rule
 # always on, no flag: taint tracking (prompt-injection rail)
 ```
@@ -394,6 +433,7 @@ What stays default:
 - `compaction_keep_last_turns 6`, `compaction_floor_frac 0.25`
 - `delegate_max_turns 20`, `delegate_max_depth 1`
 - `checkpoint_max 20`
+- `retrospect_every_runs 5`, `retrospect_window 10`, `retrospect_max_turns 4`
 
 Every one of these is reversible: flip the flag back and the behaviour is exactly
 what it was before. Nothing here changes on-disk formats without silent migration.
@@ -405,5 +445,6 @@ what it was before. Nothing here changes on-disk formats without silent migratio
 | `directives [edit\|reconcile]` | show / nano / rebuild the distilled standing instructions |
 | `skills [show\|edit <name>]` | list / read / nano the agent's how-to notes |
 | `checkpoint [restore <id>]` | list project snapshots / revert to one |
+| `retrospect [now]` | show the recorded per-run metrics / force a self-review pass |
 | `debug prefix` | measure the byte prefix two consecutive packages share |
 | `allow [list]\|add <domain> [methods]\|rm <domain>` | manage the persistent `http_request` auto-approve list |

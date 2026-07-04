@@ -289,6 +289,10 @@ def compact_prompt() -> str:
     return _template("compact.md")
 
 
+def retrospect_prompt() -> str:
+    return _template("retrospect.md")
+
+
 def skills_nudge() -> str:
     return _template("skills_nudge.md").strip()
 
