@@ -1,11 +1,12 @@
 # The Nine — cosmology and cast (working sheet)
 
-**Status: design only — thinking out loud, DevOps rules, nothing breaking.**
-Four characters below are operator-written (kept close to the operator's
-words). Five — Sveja, Freya, Tor, Loki, Baldur — were left to the assistant
-to draft by projecting the operator's pattern; they are proposals on this
-sheet, editable like everything else. `docs/OPERATION.md` holds the protocol
-frame this extends.
+**Status: ratified by the operator (2026-07-04) — design only, no code
+follows from this sheet yet.** Four characters are operator-written (kept
+close to the operator's words); five — Sveja, Freya, Tor, Loki, Baldur —
+were drafted by the assistant by projecting the operator's pattern and have
+been accepted as written. The Hawk IS the general — confirmed. What remains
+open before any code moves is the protocol, not the cast: the questions at
+the end of this sheet. `docs/OPERATION.md` holds the frame this extends.
 
 ---
 
