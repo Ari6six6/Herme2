@@ -345,3 +345,43 @@ and the alternative I passed on. Newest at the bottom of each feature.
 - **A failed pass is a no-op** (transport error, nothing banked, budget
   exhausted) — losing a reflection is never a correctness problem for the run
   that hosted it, so it can never bounce or block a finish.
+
+## Capabilities (breadth session)
+
+Toolbox tools paired with a seed skill, one capability per commit. These are
+library additions, not numbered features: they follow the toolbox precedent
+(schema out of the prompt until equipped) rather than the config-flag pattern.
+
+### `git_ops` — local git in the workspace
+
+- **No config flag; the equip gate is the off-switch.** Every existing toolbox
+  tool (`transfer`, `replicate`, `json_query`, …) ships flagless and inert until
+  `equip_tool` loads it per project. A new library tool is an extension of that
+  library, not a behaviour change to turn on, so adding one to `config.py`'s
+  DEFAULTS would be a flag nothing else in the toolbox has. The house rule's
+  "every feature behind a flag" targets loop/package behaviour; an opt-in-by-equip
+  tool is already off by default by construction.
+- **Local only — no clone/fetch/pull/push/remote.** The network git verbs are
+  absent from the allowlist and return "unknown operation". Keeping the tool
+  purely local means it never crosses the network, so it needs no place on the
+  taint rail. A cloning tool is a *separate* tool that would ingest network
+  content and therefore join `TAINTING_TOOLS` in `agent.py` — deferred as its own
+  proposal precisely because it touches `agent.py`.
+- **subcommand allowlist + argv list (shell=False).** git is invoked as a Python
+  list, so there is no shell to inject into, and only the enumerated subcommands
+  run. Rejected: a raw pass-through arg string — it would let `-c core.sshCommand=…`
+  or `--upload-pack=…` turn an inspect tool into arbitrary execution.
+- **Reads free, mutations confirmed.** status/log/diff/branch only inspect the
+  workspace (like `read_file`/`list_files`), so they run without a prompt;
+  init/add/commit go through `ctx.confirm` showing the exact git command. This
+  matches the brief's "mutating subcommands gate through confirm" and the
+  codebase's tier philosophy at once.
+- **Inline commit identity (`-c user.name/email`).** A fresh box has no git
+  identity, so a bare `git commit` fails. Passing the identity inline lets the
+  agent commit out of the box without mutating global git config (which would be
+  a side effect on the operator's box that outlives the run). Rejected: telling
+  the agent to `git config --global` — that reaches outside the workspace.
+- **Repo dir resolved inside the project (`resolve_in`).** The optional `repo`
+  arg and `add`/`diff` `path` are path-checked, so an operation can't reach a git
+  dir or stage a file outside the project. Same path-escape defense as the file
+  tools.

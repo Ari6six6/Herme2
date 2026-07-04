@@ -244,8 +244,11 @@ tiers.
 | `write_hermes_source` / `edit_hermes_source` | VPS | **always asks you y/n** with a diff; off unless `self_build_enabled`; a fixed denylist of safety-critical files refuses edits outright regardless |
 
 The toolbox ships ready-made tools (`download_file`, `transfer`, `replicate`,
-`todo`, `json_query`, `extract_code`, `base64_codec`) whose schemas don't bloat the
-prompt until equipped. Forged tools are plain Python files in `<project>/tools/`,
+`todo`, `json_query`, `extract_code`, `base64_codec`, `git_ops`) whose schemas
+don't bloat the prompt until equipped. `git_ops` versions the workspace with
+local git only — no clone/fetch/pull/push, so nothing sneaks past the taint rail;
+its mutating verbs (init/add/commit) ask you first, reads run free. Forged tools
+are plain Python files in `<project>/tools/`,
 loaded only after you approve the exact source (re-approval on any change). Host
 tools only appear once you've registered a server.
 
