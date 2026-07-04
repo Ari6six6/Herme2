@@ -62,11 +62,15 @@ def test_voice_truncated_at_max_chars():
 
 
 # ---- catalog: scopes and shadowing ---------------------------------------------
-def test_builtin_cast_ships(project, cfg):
+def test_builtin_cast_ships_the_nine(project, cfg):
     cast = personas_mod.load_all(project)
-    for name in ("owl", "smith", "scout", "scribe"):
+    for name in ("odin", "baldur", "loki", "tor", "freya",
+                 "owl", "hawk", "sveja", "arthur"):
         assert name in cast
         assert cast[name].scope == "builtin"
+        # same capacities: the Nine differ by persona, never by tool posture
+        assert cast[name].tools is None
+        assert cast[name].max_turns is None
 
 
 def test_global_shadows_builtin_and_project_shadows_global(project, cfg):
@@ -209,21 +213,28 @@ def test_system_prompt_byte_identical_when_personas_off(project, cfg):
 
 
 def test_run_as_persona_logs_and_narrows(project, cfg):
+    # A persona MAY still carry a tools line (an operator's own sheet); the
+    # narrowing seam is exercised with a custom one — the Nine carry none.
     cfg.set("personas_enabled", True)
-    p = personas_mod.get(project, "scribe")  # files only — no shell
+    gdir = personas_mod.global_dir()
+    gdir.mkdir(parents=True, exist_ok=True)
+    (gdir / "quill.md").write_text(
+        "files only\ntools: read_file, write_file, list_files, write_note\n\n"
+        "You are Quill.\n")
+    p = personas_mod.get(project, "quill")  # files only — no shell
     backend = ScriptBackend([
         _call("local_shell", {"command": "echo hi"}),  # outside the posture
-        _call("finish_run", {"summary": "done as scribe"}),
+        _call("finish_run", {"summary": "done as quill"}),
     ])
     result = agent.run(project, "tidy the notes", cfg, backend,
                        gpu=None, env={}, confirm_fn=lambda *a, **k: True, persona=p)
-    assert result.summary == "done as scribe"
+    assert result.summary == "done as quill"
     lines = [json.loads(l) for l in
              (project.runs_dir / "0001" / "transcript.jsonl").read_text().splitlines()]
-    assert any(e.get("role") == "persona" and e.get("content") == "scribe"
+    assert any(e.get("role") == "persona" and e.get("content") == "quill"
                for e in lines)
     system = next(e for e in lines if e.get("role") == "system")
-    assert "## Persona — scribe" in system["content"]
+    assert "## Persona — quill" in system["content"]
     shell_result = next(e for e in lines
                         if e.get("role") == "tool" and "local_shell" in
                         e.get("content", ""))

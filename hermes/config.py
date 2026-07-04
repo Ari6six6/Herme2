@@ -78,10 +78,13 @@ DEFAULTS: dict = {
     "workday_worker_turns": 14,  # each worker's own turn cap
     "workday_briefing_rounds": 1,  # round-robin passes in the morning room (0 = skip)
     "workday_debrief_rounds": 1,  # round-robin passes in the evening room (0 = skip)
-    "workday_max_seconds": 1800,  # day clock; on expiry, straight to the debrief
-    "workday_skill_harvest": True,  # bank the day's lessons as skills (needs skills_enabled)
+    "workday_max_seconds": 1800,  # the backstop clock; nightfall proper = all workers reported
+    "workday_skill_harvest": True,  # Freya's choosing: bank lessons as skills (needs skills_enabled)
     "workday_supervisor": "owl",  # every finished worker reports off to this persona ("" = none)
     "workday_rework_rounds": 1,  # times the watcher may send a report back
+    "workday_room": "odin,owl,hawk",  # the staff in the rooms ("" = whole cast, capped)
+    "workday_courier": "sveja",  # delivers each report to the record ("" = none)
+    "workday_general": "hawk",  # calls the roster at nightfall ("" = none)
     # Prefix-cache-friendly package ordering (feature 5): move volatile runtime
     # status (date, GPU, hosts) out of the stable header so the header + persona
     # + tools + skills index stay a byte-identical prefix for vLLM prefix caching.

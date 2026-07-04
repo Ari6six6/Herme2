@@ -1,26 +1,32 @@
-"""The workday (feature 11): one operator prompt = one full day of the cast.
+"""The workday (feature 11): one operator prompt = one life of the domain
+admin, worked by the Nine. See docs/THE_NINE.md for the cosmology.
 
-The chain of command, top to bottom: the operator hands down today's task; the
-cast convenes at a MORNING BRIEFING over the mission, yesterday's debrief and
-the task; the foreman cuts assignments from that discussion; each assigned
-persona works its brief as a subagent child — real tools, the normal gates;
-the cast convenes again at an EVENING DEBRIEF over the reports; the scribe
-writes the day up — what happened, where the mission stands, what tomorrow
-inherits. That debrief is both the reply the operator reads and the carryover
-the NEXT day's briefing opens with, so days chain: task → work → debrief →
-tomorrow's briefing. Optionally the day closes by banking what was learned
-into skills (feature 3) — the self-improvement loop.
+The day, sun-up to the 24th hour: the operator hands down today's task; the
+staff convene at a MORNING BRIEFING over the strategy, the predecessor's
+debrief and the task; ODIN cuts assignments from that discussion — whether
+the day needs the arm, the adversary or a child is his call; each assigned
+persona works its brief as a subagent child — real tools, the normal gates —
+and on finishing reports off to the WATCHER (the owl's handoff challenge);
+the COURIER delivers each report so nothing dies unheard; when the last
+worker has reported, BALDUR DIES — nightfall (the wall clock is only the
+backstop); the GENERAL calls the roster; the staff convene at the EVENING
+DEBRIEF over the record; and the DOMAIN ADMIN closes his cycle by writing
+the debrief — his report to the operator AND the briefing his successor
+opens at sun-up. The domain admins don't die; they come and go: days chain
+through that debrief. In the night, FREYA chooses what the fallen carried
+that deserves to live on (the skills harvest).
 
-To the operator the CLI is unchanged: `run <task>` does all of this under the
-hood when workday_enabled is on, and `hey <name>, ...` still pulls one persona
-aside directly, skipping the day. A day is also a run: it gets a run dir, its
-transcript carries every room and every worker, and the debrief becomes the
-run summary future packages inherit.
+To the operator the CLI is unchanged: `run <task>` does all of this under
+the hood when workday_enabled is on, and `hey <name>, ...` still pulls one
+persona aside directly, skipping the day. A day is also a run: it gets a run
+dir, its transcript carries every room and every worker, and the closing
+debrief becomes the run summary future packages inherit.
 
-The rooms (briefing/debrief) have no tools — deliberation only, no
-confirm/taint surface. The workers dispatch through the same registry, the
-same confirm and the same taint rail as any delegate child: the day changes
-who does the work, never what the work is allowed to touch.
+The rooms (briefing/debrief), the handoff, the delivery and the roster call
+have no tools — deliberation only, no confirm/taint surface. The workers
+dispatch through the same registry, the same confirm and the same taint rail
+as any delegate child: the day changes who does the work, never what the
+work is allowed to touch.
 """
 
 from __future__ import annotations
@@ -28,6 +34,7 @@ from __future__ import annotations
 import json
 import re
 import time
+from dataclasses import dataclass
 from pathlib import Path
 
 from hermes import hosts as hosts_mod
@@ -43,8 +50,21 @@ ASSIGNMENT_RE = re.compile(r"^ASSIGNMENT:\s*([A-Za-z0-9_-]+)\s*:\s*(.+)$", re.M)
 HANDOFF_RE = re.compile(r"HANDOFF:\s*(ACCEPT|REWORK)(?:\s*:\s*(.+))?", re.I)
 _SLUG_RE = re.compile(r"[^a-z0-9]+")
 _ID_RE = re.compile(r"^(\d{4})-")
-CAST_MAX = 4  # personas on shift — same cap as a council convening
+CAST_MAX = 4  # room fallback cap when no configured staff resolves
 MISSION_HEAD_CHARS = 2000
+
+
+@dataclass
+class Report:
+    """One worker's day on the record."""
+    worker: str
+    brief: str
+    conclusion: str
+    trail: str = ""  # the watcher's handoff trail
+    delivery: str = ""  # the courier's last-words note
+
+    def fell(self) -> bool:
+        return self.conclusion.startswith(("[sub-agent stopped", "(skipped"))
 
 
 def days_dir(project) -> Path:
@@ -107,7 +127,11 @@ def parse_assignments(text: str, cast, max_workers: int):
 
 def _fallback_worker(cast):
     """No parseable assignments — the whole task goes to one pair of hands.
-    Prefer a persona with an unrestricted tool posture (the builder)."""
+    The arm (tor) if he's on the roster, else an unrestricted posture, else
+    whoever stands first."""
+    named = personas_mod.resolve({p.name: p for p in cast}, "tor")
+    if named is not None:
+        return named
     for p in cast:
         if p.tools is None:
             return p
@@ -142,12 +166,31 @@ def run_day(project, task, cfg, backend, gpu=None, env=None, confirm_fn=None,
 
     max_chars = cfg.get("persona_max_chars", 2000)
     catalog = personas_mod.load_all(project, max_chars)
-    cast = [catalog[n] for n in sorted(catalog)][:CAST_MAX]
-    roster = personas_mod.index(catalog={p.name: p for p in cast})
+
+    def _office(key, default):
+        """Resolve a configured office-holder from the catalog. None = the
+        seat is vacant, and every vacant seat fails open — it never stops
+        the day, the step is simply skipped."""
+        name = str(cfg.get(key, default) or "").strip()
+        return personas_mod.resolve(catalog, name) if name else None
+
+    # The staff: who sits in the rooms. Workers are dispatched from the whole
+    # catalog; the rooms stay small so deliberation stays cheap.
+    staff = []
+    for n in str(cfg.get("workday_room", "odin,owl,hawk")).split(","):
+        p = personas_mod.resolve(catalog, n.strip()) if n.strip() else None
+        if p is not None and all(q.name != p.name for q in staff):
+            staff.append(p)
+    if not staff:
+        staff = [catalog[n] for n in sorted(catalog)][:CAST_MAX]
+    room_roster = personas_mod.index(catalog={p.name: p for p in staff})
+    roster_all = personas_mod.index(catalog=catalog)
+
     room_budget = max(1000, int(cfg.get("council_transcript_chars", 24000)))
     clock = float(cfg.get("workday_max_seconds", 1800))
     start = time.monotonic()
     calls = 0  # every backend completion the day burns
+    clock_cut = False  # did the backstop clock, not the work, end the day?
 
     def _shown(content) -> str:
         return strip_think(content, think_re)
@@ -158,12 +201,12 @@ def run_day(project, task, cfg, backend, gpu=None, env=None, confirm_fn=None,
         nonlocal calls
         entries: list[tuple[int, str, str]] = []
         for rnd in range(1, max(0, int(rounds)) + 1):
-            for p in cast:
+            for p in staff:
                 if time.monotonic() - start > clock:
                     log({"role": role, "content": "(room cut short: day clock)"})
                     return entries
                 system = package.render(member_prompt, {
-                    "name": p.name, "voice": p.voice, "roster": roster,
+                    "name": p.name, "voice": p.voice, "roster": room_roster,
                 })
                 so_far = package.truncate_keep_tail(
                     _transcript_text(entries), room_budget
@@ -200,35 +243,37 @@ def run_day(project, task, cfg, backend, gpu=None, env=None, confirm_fn=None,
         + package.truncate_keep_tail(yesterday, room_budget)
         + "\n\n# TODAY'S TASK (from the operator)\n" + task.strip()
     )
-    print(dim(f"  morning briefing — {', '.join(p.name for p in cast)}"))
+    print(dim(f"  morning briefing — {', '.join(p.name for p in staff)}"))
     briefing = _convene(package.briefing_member_prompt(), papers,
                         cfg.get("workday_briefing_rounds", 1), "briefing")
 
-    # The foreman cuts assignments from the discussion. Fail open: a dead or
-    # incoherent foreman means the whole task goes to one worker, never no day.
+    # Odin cuts assignments from the discussion — the arm, the adversary or a
+    # child, at his discretion, from the WHOLE catalog. Fail open: a dead or
+    # incoherent dispatch hands the whole task to one worker, never no day.
     assignments = []
+    all_cast = list(catalog.values())
     try:
-        foreman_system = package.render(package.foreman_prompt(), {
-            "roster": roster,
+        odin_system = package.render(package.odin_prompt(), {
+            "roster": roster_all,
             "max_workers": str(cfg.get("workday_max_workers", 3)),
         })
-        foreman_user = (papers + "\n\n# THE BRIEFING\n"
-                        + package.truncate_keep_tail(_transcript_text(briefing),
-                                                     room_budget))
+        odin_user = (papers + "\n\n# THE BRIEFING\n"
+                     + package.truncate_keep_tail(_transcript_text(briefing),
+                                                  room_budget))
         result = backend.chat([
-            {"role": "system", "content": foreman_system},
-            {"role": "user", "content": foreman_user},
+            {"role": "system", "content": odin_system},
+            {"role": "user", "content": odin_user},
         ])
         calls += 1
-        assignments = parse_assignments(_shown(result.content), cast,
+        assignments = parse_assignments(_shown(result.content), all_cast,
                                         cfg.get("workday_max_workers", 3))
     except LLMTransportError:
         pass
     if not assignments:
-        worker = _fallback_worker(cast)
+        worker = _fallback_worker(all_cast)
         assignments = [(worker, task.strip())]
-        log({"role": "foreman", "content": f"(no parseable assignments — "
-                                           f"whole task to {worker.name})"})
+        log({"role": "dispatch", "content": f"(no parseable assignments — "
+                                            f"whole task to {worker.name})"})
     for p, brief in assignments:
         log({"role": "assignment", "name": p.name, "content": brief})
         print(cyan(f"  assignment → {p.name}: ") + dim(brief[:100]))
@@ -245,12 +290,38 @@ def run_day(project, task, cfg, backend, gpu=None, env=None, confirm_fn=None,
     ctx.registry = registry
     ctx._delegate_log = log
 
-    # The watcher (the handoff supervisor): every worker that finishes reports
-    # off to this persona, who asks the process question and may send the
-    # report back. Fails open — no watcher on shift means reports file as-is.
-    sup_name = str(cfg.get("workday_supervisor", "owl") or "").strip()
-    sup = (personas_mod.resolve({p.name: p for p in cast}, sup_name)
-           if sup_name else None)
+    # The watcher (the owl's handoff challenge): every worker that finishes
+    # reports off to this persona, who asks the process question and may send
+    # the report back. Fails open — a vacant seat means reports file as-is.
+    sup = _office("workday_supervisor", "owl")
+    # The courier (sveja): delivers each report so nothing dies unheard.
+    courier = _office("workday_courier", "sveja")
+
+    def _deliver(worker, brief, report):
+        """The courier speaks the child's last words onto the record. One
+        completion, no tools; a vacant or unreachable courier delivers
+        nothing and the raw report stands alone."""
+        nonlocal calls
+        fell = report.startswith("[sub-agent stopped")
+        system = package.render(package.courier_prompt(), {
+            "name": courier.name, "voice": courier.voice,
+        })
+        user = (
+            f"The child {worker.name} was sent to:\n{brief}\n\n"
+            + ("It FELL before finishing — its partial trail:\n" if fell
+               else "Its final report:\n")
+            + package.truncate_keep_tail(report, 6000)
+            + f"\n\nDeliver its last words now, {courier.name}."
+        )
+        try:
+            result = backend.chat([
+                {"role": "system", "content": system},
+                {"role": "user", "content": user},
+            ])
+        except LLMTransportError:
+            return ""
+        calls += 1
+        return _shown(result.content)
 
     def _handoff_verdict(worker, brief, report):
         """One completion, no tools: the watcher reads the report and rules.
@@ -313,12 +384,14 @@ def run_day(project, task, cfg, backend, gpu=None, env=None, confirm_fn=None,
             log({"role": "report", "name": worker.name, "content": report})
         return report, f"{sup.name}: " + "; ".join(events)
 
-    reports: list[tuple[str, str, str, str]] = []  # (persona, brief, conclusion, trail)
+    reports: list[Report] = []
     worker_turns = cfg.get("workday_worker_turns", 14)
     for p, brief in assignments:
         if time.monotonic() - start > clock:
-            reports.append((p.name, brief, "(skipped — the day's clock ran out "
-                                           "before this assignment started)", ""))
+            clock_cut = True
+            reports.append(Report(p.name, brief,
+                                  "(skipped — the day's clock ran out before "
+                                  "this assignment started)"))
             continue
         worker_brief = (
             f"Today's operator task:\n{task.strip()}\n\n"
@@ -334,16 +407,66 @@ def run_day(project, task, cfg, backend, gpu=None, env=None, confirm_fn=None,
         trail = ""
         if sup is not None and sup.name != p.name:  # no one referees their own work
             out, trail = _supervise(p, brief, out, worker_brief)
-        reports.append((p.name, brief, out, trail))
+        delivery = ""
+        if courier is not None and courier.name != p.name:
+            delivered = _deliver(p, brief, out)
+            if delivered:
+                delivery = f"{courier.name}: {delivered}"
+                log({"role": "delivery", "name": p.name, "content": delivery})
+        reports.append(Report(p.name, brief, out, trail, delivery))
+
+    # ---- nightfall: baldur dies ---------------------------------------------
+    night_reason = ("the backstop clock" if clock_cut
+                    else "all workers reported")
+    log({"role": "nightfall", "content": night_reason})
+    print(dim(f"  baldur dies — nightfall ({night_reason})"))
+
+    def _report_block(r: Report) -> str:
+        s = f"## {r.worker} — assignment: {r.brief}\n\n{r.conclusion}"
+        if r.trail:
+            s += f"\n\n[handoff — {r.trail}]"
+        if r.delivery:
+            s += f"\n\n[courier — {r.delivery}]"
+        return s
+
+    reports_block = "\n\n".join(_report_block(r) for r in reports)
+
+    # The general's roster call: who went out, who reported, who fell.
+    general = _office("workday_general", "hawk")
+    roster_call = ""
+    if general is not None:
+        status_lines = "\n".join(
+            f"- {r.worker}: " + ("FELL" if r.fell() else "reported")
+            + (f" — courier: {r.delivery}" if r.delivery else "")
+            for r in reports
+        )
+        try:
+            result = backend.chat([
+                {"role": "system", "content": package.render(
+                    package.roster_call_prompt(),
+                    {"name": general.name, "voice": general.voice})},
+                {"role": "user", "content":
+                    "# WHO WAS SENT OUT\n"
+                    + "\n".join(f"- {p.name}: {brief}" for p, brief in assignments)
+                    + "\n\n# STATUS AT NIGHTFALL\n" + status_lines
+                    + "\n\n# THE REPORTS\n"
+                    + package.truncate_keep_tail(reports_block, room_budget)
+                    + f"\n\nCall the roster, {general.name}."},
+            ])
+            calls += 1
+            roster_call = _shown(result.content)
+            if roster_call:
+                log({"role": "roster", "name": general.name,
+                     "content": roster_call})
+                print(magenta(f"  [roster·{general.name}] ")
+                      + dim(roster_call.splitlines()[0][:110]))
+        except LLMTransportError:
+            pass
 
     # ---- evening debrief ----------------------------------------------------
-    reports_block = "\n\n".join(
-        f"## {name} — assignment: {brief}\n\n{out}"
-        + (f"\n\n[handoff — {trail}]" if trail else "")
-        for name, brief, out, trail in reports
-    )
     evening_papers = (
         "# TODAY'S TASK (from the operator)\n" + task.strip()
+        + (("\n\n# THE GENERAL'S ROSTER\n" + roster_call) if roster_call else "")
         + "\n\n# THE DAY'S REPORTS\n"
         + package.truncate_keep_tail(reports_block, room_budget)
     )
@@ -351,8 +474,10 @@ def run_day(project, task, cfg, backend, gpu=None, env=None, confirm_fn=None,
     debrief_talk = _convene(package.debrief_member_prompt(), evening_papers,
                             cfg.get("workday_debrief_rounds", 1), "debrief")
 
-    scribe_user = (
-        "# MISSION (global, across days)\n" + (mission or "(empty)")
+    # The domain admin closes his cycle: the debrief he writes is his report
+    # to the operator AND the briefing his successor opens at sun-up.
+    closing_user = (
+        "# STRATEGY (global, across days)\n" + (mission or "(empty)")
         + "\n\n" + evening_papers
         + "\n\n# THE DEBRIEF DISCUSSION\n"
         + (package.truncate_keep_tail(_transcript_text(debrief_talk),
@@ -360,26 +485,27 @@ def run_day(project, task, cfg, backend, gpu=None, env=None, confirm_fn=None,
     )
     try:
         result = backend.chat([
-            {"role": "system", "content": package.debrief_scribe_prompt()},
-            {"role": "user", "content": scribe_user},
+            {"role": "system", "content": package.domain_admin_prompt()},
+            {"role": "user", "content": closing_user},
         ])
         calls += 1
         debrief = _shown(result.content) or ""
     except LLMTransportError:
         debrief = ""
     if not debrief:
-        # The operator is owed a record even with a dead scribe: the raw reports.
-        debrief = ("(the scribe could not write the day up — raw reports "
-                   "follow)\n\n" + reports_block)
-    log({"role": "debrief-scribe", "content": debrief})
+        # The operator is owed a record even with a dead closer: the raw reports.
+        debrief = ("(the domain admin could not write the day up — raw "
+                   "reports follow)\n\n" + reports_block)
+    log({"role": "closing", "content": debrief})
 
     # ---- write the day ------------------------------------------------------
     d = days_dir(project)
     d.mkdir(parents=True, exist_ok=True)
     base = f"{_next_id(d):04d}-{_slug(task)}"
-    worked = ", ".join(f"{name} ({brief[:40]})" for name, brief, _, _ in reports)
+    worked = ", ".join(f"{r.worker} ({r.brief[:40]})" for r in reports)
     meta = (f"# Day {base} — {task.strip()}\n\n"
-            f"Cast: {', '.join(p.name for p in cast)} · worked: {worked}\n")
+            f"Staff: {', '.join(p.name for p in staff)} · worked: {worked}"
+            f" · nightfall: {night_reason}\n")
     (d / f"{base}.md").write_text(meta + "\n" + debrief.rstrip() + "\n")
     day_log = (
         meta
@@ -387,6 +513,8 @@ def run_day(project, task, cfg, backend, gpu=None, env=None, confirm_fn=None,
         + "\n\n# ASSIGNMENTS\n\n"
         + "\n".join(f"- {p.name}: {brief}" for p, brief in assignments)
         + "\n\n# REPORTS\n\n" + (reports_block or "(none)")
+        + "\n\n# NIGHTFALL\n\n" + night_reason
+        + "\n\n# THE GENERAL'S ROSTER\n\n" + (roster_call or "(no roster call)")
         + "\n\n# EVENING DEBRIEF\n\n"
         + (_transcript_text(debrief_talk) or "(skipped)")
         + "\n\n# DEBRIEF (as written)\n\n" + debrief.rstrip() + "\n"
@@ -395,7 +523,7 @@ def run_day(project, task, cfg, backend, gpu=None, env=None, confirm_fn=None,
 
     summary = package.truncate_keep_head(
         f"Workday {base}. Reports from: "
-        + ", ".join(name for name, _, _, _ in reports) + ".\n\n" + debrief, 1200
+        + ", ".join(r.worker for r in reports) + ".\n\n" + debrief, 1200
     )
     (run_dir / "summary.md").write_text(summary + "\n")
     (run_dir / "final.md").write_text(debrief + "\n")

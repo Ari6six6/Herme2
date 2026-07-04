@@ -171,11 +171,10 @@ chose. His name is Arthur.
 - The owl finds the general by waiting on the landmark; a general who sees a
   landmark must talk to it.
 
-## What already exists under other names
+## What runs where
 
-No code follows from this sheet — but the sheet is not fantasy either; most
-of it is already running under bureaucratic names. The mapping, so the
-eventual rename is done once and right:
+The nervous system is wired (the Nine are the shipped cast; the offices are
+config keys). The mapping:
 
 | The Nine | In the code today |
 |---|---|
@@ -183,25 +182,34 @@ eventual rename is done once and right:
 | the domain admin's life | one operator message = one package = one run (`agent.run` / `workday.run_day`) — package-per-prompt already IS the day/death cycle; no rolling context survives the night |
 | the night / the closing protocol | the end-of-day phase: reports gathered, debrief written, carryover filed, transcript closed, process ends |
 | the child (Arthur) | `subagent.run_child` — the worker with the shortest life |
-| the hawk's report of the dead | the handoff (`workday_supervisor`): a finished worker reports off before the evening; today the hawk's report and the owl's challenge are one merged step |
-| the owl's challenge | the watcher's process question (`HANDOFF: ACCEPT/REWORK`) and, at day scale, the verifier pass |
+| Odin's dispatch | the assignment cut (`prompts/odin.md`) — the arm, the adversary or a child, from the whole catalog, at his call |
+| Sveja's delivery | the courier pass (`workday_courier`): each report spoken onto the record; the fallen announced as died unheard |
+| the hawk's roster | the roster call at nightfall (`workday_general`): reported or fell, one line each |
+| the owl's challenge | the handoff (`workday_supervisor`): `HANDOFF: ACCEPT/REWORK` on every finished worker; at day scale, the verifier pass |
 | Freya's choosing | the harvest (`workday_skill_harvest`) + notes + carryover — what survives the night |
 | Loki's chain | the taint rail (always on) |
 | Tor's hammer on the record | every tool result echoed + logged; verification enforcement |
-| Baldur's death | the day clock (`workday_max_seconds`) — nightfall on expiry |
+| Baldur's death | nightfall = all workers reported, logged with its reason; `workday_max_seconds` is the backstop |
+| the domain admin's closing | `prompts/domain_admin.md`: the debrief that is the operator's reply AND the successor's briefing |
+| the rooms' staff | `workday_room` (default odin,owl,hawk) — workers dispatch from the whole catalog, the rooms stay small |
 | landmarks | known paths where lifecycles meet: `days/`, `runs/`, `notes.md`, the reports in the day log |
 | central vs base file system | project root (harness-managed, confirm-gated) vs `workspace/` (the agents' read/write ground) |
 
-## Open on this sheet
+## Settled by the operator (2026-07-04) — and built
 
-1. Baldur: is nightfall purely the wall clock, or also "all assignments
-   reported" (whichever first)?
-2. Sveja: a speaking part, or the transport itself — the structured file a
-   report must be written into to count as delivered?
-3. Tor and Loki: standing offices every day, or called only when the day's
-   mission needs an arm / an adversary?
-4. The general (hawk) vs the foreman slot in today's code: same office?
-   (The foreman cuts assignments; the general keeps the roster and receives
-   reports — today these are two steps of one machine.)
-5. The domain admin's closing protocol: exactly what must he do in the 24th
-   hour, in order, before he is allowed to die?
+1. **Baldur's death = all workers reported.** Nightfall proper is the last
+   report coming in; the wall clock (`workday_max_seconds`) is only the
+   backstop, and the record says which one ended the day.
+2. **Sveja is a speaking part.** She delivers each report herself
+   (`workday_courier`), and a child that fell — cap, error, clock — is
+   announced as having died unheard, charged to her, never to it.
+3. **Tor and Loki are summoned at Odin's discretion.** No standing offices:
+   whether the day needs the arm or the adversary is his dispatch call.
+4. **Assignment-cutting is Odin's** (the old foreman slot is his office);
+   the Hawk keeps the roster and calls it at nightfall
+   (`workday_general`).
+5. **The domain admins don't die; they come and go.** The closing protocol
+   is exactly: receive the briefing (the package), run the day, write the
+   debrief — which is both the report to the operator and the briefing the
+   successor opens at sun-up. A continuous loop; the package is the spirit
+   that carries it.

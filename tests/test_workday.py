@@ -119,7 +119,7 @@ def test_full_day_end_to_end(project, cfg, duo):
              (run_dir / "transcript.jsonl").read_text().splitlines()]
     roles = {e["role"] for e in lines}
     assert {"briefing", "assignment", "report", "debrief",
-            "debrief-scribe"} <= roles
+            "nightfall", "closing"} <= roles
 
     # workers ran as persona children: sub-agent prompt + the persona voice
     worker_system = backend.calls[3][0]["content"]
@@ -309,6 +309,103 @@ def test_watcher_never_referees_own_work(project, cfg, duo):
     lines = [json.loads(l) for l in
              (project.runs_dir / "0001" / "transcript.jsonl").read_text().splitlines()]
     assert not any(e["role"] == "handoff" for e in lines)
+
+
+# ---- the nervous system: courier, roster call, nightfall -------------------------
+@pytest.fixture
+def full_shift(duo):
+    """duo + sveja (courier) and hawk (general) so the default offices fill.
+    The default room 'odin,owl,hawk' then resolves to [hawk] alone."""
+    gdir = personas_mod.global_dir()
+    gdir.mkdir(parents=True, exist_ok=True)
+    (gdir / "sveja.md").write_text(
+        "the courier — no report dies unheard\n\nYou are Sveja.\n")
+    (gdir / "hawk.md").write_text(
+        "the general — keeps the roster\n\nYou are Hawk.\n")
+
+
+def test_courier_and_roster_wire_the_night(project, cfg, duo, full_shift):
+    backend = ScriptBackend([
+        _say("hawk's morning view"),  # the room is the resolved staff: hawk
+        _say(FOREMAN_BETA),
+        _call("finish_run", {"summary": "BETA REPORT: fixed and ran"}),
+        _say("beta was sent to fix; it reported fixed; nothing died unheard"),
+        _say("beta: reported. Nothing for the night to remove."),
+        _say("hawk's evening take"),
+        _say(DEBRIEF_DOC),
+    ])
+    result = _run_day(project, cfg, backend)
+    assert "Alpha audited, Beta fixed." in result.final_text
+    assert len(backend.calls) == 7
+
+    # the courier spoke as sveja, about beta's report
+    courier_call = backend.calls[3]
+    assert "You are Sveja." in courier_call[0]["content"]
+    assert "BETA REPORT" in courier_call[1]["content"]
+    # the general's roster call saw the courier's delivery and the status
+    roster_call = backend.calls[4]
+    assert "You are Hawk." in roster_call[0]["content"]
+    assert "- beta: reported" in roster_call[1]["content"]
+    assert "died unheard" in roster_call[1]["content"]  # via the delivery
+    # the debrief room opened over the roster
+    debrief_call = backend.calls[5]
+    assert "# THE GENERAL'S ROSTER" in debrief_call[1]["content"]
+    assert "Nothing for the night to remove." in debrief_call[1]["content"]
+
+    log = (workday.days_dir(project) / "0001-sort-out-the-parser.log.md").read_text()
+    assert "[courier — sveja: beta was sent to fix" in log
+    assert "# THE GENERAL'S ROSTER" in log
+    lines = [json.loads(l) for l in
+             (project.runs_dir / "0001" / "transcript.jsonl").read_text().splitlines()]
+    roles = {e["role"] for e in lines}
+    assert {"delivery", "roster", "nightfall"} <= roles
+    nightfall = next(e for e in lines if e["role"] == "nightfall")
+    assert nightfall["content"] == "all workers reported"
+
+
+def test_courier_reports_a_fallen_child(project, cfg, duo, full_shift):
+    cfg.set("workday_worker_turns", 1)  # beta will hit its cap: a fallen child
+    backend = ScriptBackend([
+        _say("hawk's view"),
+        _say(FOREMAN_BETA),
+        _call("write_note", {"text": "working..."}),  # turn 1 — then the cap
+        _say("beta fell at its cap; its trail shows one note written"),
+        _say("beta: FELL at its cap. The night removes it; the note stands."),
+        _say("hawk's take"),
+        _say(DEBRIEF_DOC),
+    ])
+    _run_day(project, cfg, backend)
+    courier_call = backend.calls[3]
+    assert "It FELL before finishing" in courier_call[1]["content"]
+    roster_call = backend.calls[4]
+    assert "- beta: FELL" in roster_call[1]["content"]
+
+
+def test_nightfall_by_backstop_clock_is_on_the_record(project, cfg, duo,
+                                                      monkeypatch):
+    ticks = iter([0.0, 0.0, 0.0])
+    monkeypatch.setattr(workday.time, "monotonic", lambda: next(ticks, 1e9))
+    backend = ScriptBackend([
+        _say("alpha's view"), _say("beta's view"), _say(FOREMAN),
+        _say(DEBRIEF_DOC),
+    ])
+    _run_day(project, cfg, backend)
+    lines = [json.loads(l) for l in
+             (project.runs_dir / "0001" / "transcript.jsonl").read_text().splitlines()]
+    nightfall = next(e for e in lines if e["role"] == "nightfall")
+    assert nightfall["content"] == "the backstop clock"
+    day = (workday.days_dir(project) / "0001-sort-out-the-parser.md").read_text()
+    assert "nightfall: the backstop clock" in day
+
+
+def test_vacant_offices_change_nothing(project, cfg, duo):
+    # duo has no sveja/hawk/odin/owl: courier, general and watcher seats are
+    # vacant, the room falls back to the whole cast — the day still runs and
+    # burns not one extra completion.
+    backend = ScriptBackend(_full_day_script())
+    result = _run_day(project, cfg, backend)
+    assert backend.turns == []  # exactly the scripted calls, nothing more
+    assert "Alpha audited, Beta fixed." in result.final_text
 
 
 # ---- the harvest: lessons become skills ------------------------------------------

@@ -261,10 +261,12 @@ builtin (shipped with Hermes) < global (`~/.hermes/personas/`) < project
 (`<project>/personas/`). Shadow a shipped persona by creating a file of the same
 name in a more specific scope.
 
-The shipped starter cast: **owl** (the analyst — dissects, audits, weighs;
-read-and-observe tools only), **smith** (the builder — writes, runs, verifies;
-full tool set), **scout** (the researcher — web-first, cites sources), and
-**scribe** (the editor — documents and summaries; files only, no shell, no net).
+The shipped cast is **the Nine** (see `docs/THE_NINE.md` for the cosmology):
+odin, baldur, loki, tor, freya, owl, hawk, sveja, arthur. Same capacities by
+design — no shipped persona carries a tools line or a turn cap; they differ
+by the question each one owns, and the workday gives each an office. Your
+own sheets (global or per-project) MAY still carry `tools:`/`max_turns:`
+headers; those keep working as narrowing.
 
 Three ways a persona takes a run:
 
@@ -335,37 +337,42 @@ One operator prompt = one full day of the cast, under the hood of the same
 `run` command. You are the top of the chain; your prompt is the day's task
 against the **global mission**, and the day runs a fixed protocol:
 
-1. **Morning briefing** — the cast convenes (no tools, deliberation only) over
-   the mission, **yesterday's debrief** and today's task; each persona says what
-   it would take on.
-2. **The foreman** cuts assignments from that discussion — strict
-   `ASSIGNMENT: <name>: <brief>` lines, at most `workday_max_workers`. A
-   foreman that flops fails open: the whole task goes to one worker; the day
-   never dies on a malformed dispatch.
-3. **The work** — each assigned persona runs as a subagent child with its own
-   tool posture and `workday_worker_turns` cap. Same registry, same confirm
-   gates, same taint rail: the day changes *who* works, never what work is
-   allowed to touch.
-4. **The handoff** — a finished worker doesn't vanish into the evening pile:
-   it reports off to the **watcher** (`workday_supervisor`, the owl by
-   default), one completion asking the process question — did they do the
-   thing, or talk about the thing? — ending `HANDOFF: ACCEPT` or
-   `HANDOFF: REWORK: <what to fix>`. A sent-back worker gets up to
-   `workday_rework_rounds` more passes with the objection in hand, and the
-   whole trail rides into the debrief on the record. Fails open: no watcher
-   on shift, an unreachable one, or no verdict line files the report as-is;
-   nobody referees their own work.
-5. **Evening debrief** — the cast convenes again over the reports (handoff
-   trails included) and calls out anything dressed up; the **scribe** writes
-   the day up: What happened / Mission status / Open items / Tomorrow.
-6. **Escalation and carryover** — the debrief is the reply you read, it becomes
-   the run's summary (so ordinary future packages inherit it), it's written to
-   `<project>/days/NNNN-<slug>.md` (full room-by-room record in
-   `NNNN-<slug>.log.md`), and the **next** day's briefing opens with it. Days
-   chain: task → work → debrief → tomorrow's briefing.
-7. **The harvest** (the self-improvement loop) — with `skills_enabled` on, a
-   final bounded pass with ONLY the skills tools banks what the day taught as
-   skills, so tomorrow's shift doesn't relearn it.
+1. **Morning briefing** — the staff (`workday_room`, default odin,owl,hawk)
+   convene (no tools, deliberation only) over the mission, **yesterday's
+   debrief** and today's task.
+2. **Odin cuts the assignments** from that discussion — strict
+   `ASSIGNMENT: <name>: <brief>` lines, at most `workday_max_workers`, drawn
+   from the WHOLE cast: the arm, the adversary or a child is his call. A
+   flopped dispatch fails open: the whole task goes to one worker; the day
+   never dies on a malformed cut.
+3. **The work** — each assigned persona runs as a subagent child under
+   `workday_worker_turns`. Same registry, same confirm gates, same taint
+   rail: the day changes *who* works, never what work is allowed to touch.
+4. **The handoff** — a finished worker reports off to the **watcher**
+   (`workday_supervisor`, the owl by default), one completion asking the
+   process question — did they do the thing, or talk about the thing? —
+   ending `HANDOFF: ACCEPT` or `HANDOFF: REWORK: <what to fix>`. A sent-back
+   worker gets up to `workday_rework_rounds` more passes. Fails open; nobody
+   referees their own work.
+5. **The courier delivers** — sveja (`workday_courier`) speaks each report's
+   last words onto the record, and a worker that fell — cap, error, clock —
+   is announced as having died unheard rather than silently dropped.
+6. **Nightfall — baldur dies** when the last worker has reported (the wall
+   clock `workday_max_seconds` is only the backstop; the record names which
+   one ended the day). The **general** (`workday_general`, the hawk) calls
+   the roster: reported or fell, one line each.
+7. **Evening debrief** — the staff convene again over the roster and the
+   reports (handoff trails and deliveries included) and call out anything
+   dressed up.
+8. **The domain admin closes** — the debrief he writes (What happened /
+   Mission status / Open items / Tomorrow) is the reply you read, the run's
+   summary future packages inherit, the record in
+   `<project>/days/NNNN-<slug>.md` (room-by-room log beside it), and the
+   briefing the NEXT domain admin opens with. They don't die; they come and
+   go — days chain through that debrief.
+9. **Freya chooses** (the self-improvement loop) — with `skills_enabled` on,
+   a final bounded pass with ONLY the skills tools banks what the fallen
+   carried that deserves to live on.
 
 `hey <name>, ...` still pulls one persona aside for a direct order, skipping
 the day. A wall clock (`workday_max_seconds`) guards the whole day: on expiry,
@@ -383,6 +390,9 @@ straight to the debrief — you always get the write-up.
 | `workday_skill_harvest` | `true` | bank lessons as skills (bites only with `skills_enabled`) |
 | `workday_supervisor` | `"owl"` | the watcher finished workers report off to (`""` = none) |
 | `workday_rework_rounds` | `1` | times the watcher may send a report back |
+| `workday_room` | `"odin,owl,hawk"` | the staff in the rooms (`""` = whole cast, capped) |
+| `workday_courier` | `"sveja"` | delivers each report to the record (`""` = none) |
+| `workday_general` | `"hawk"` | calls the roster at nightfall (`""` = none) |
 
 Cost: a default day with the 4-persona cast is 4 briefing + 1 foreman +
 (workers × their turns) + 4 debrief + 1 scribe completions — budget a day like

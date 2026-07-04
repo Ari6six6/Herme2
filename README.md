@@ -70,9 +70,9 @@ config file; **full reference and recommended 60K settings in
 | **Checkpointing** | Snapshots the project before file-mutating turns; `checkpoint restore <id>` rewinds a run gone sideways. | **on** |
 | **Verification enforcement** | Bounces a finish that changed files but never *ran* anything. | off |
 | **Taint tracking** | Content pulled from the network marks the next turn untrusted — its tool calls all require your y/n, so a hostile page can't steer a privileged action. The prompt-injection rail. | **always on** |
-| **Personas** | A cast of named archetypes — each a voice + a capacity + a tool posture, one markdown file each. `run hey owl, ...` invokes one; routing picks the expert when you talk normally; `delegate` can spawn a child *as* one. | off |
+| **Personas** | The Nine (see `docs/THE_NINE.md`): a shipped cast of named archetypes, one markdown file each — same capacities, different questions. `run hey owl, ...` invokes one; routing picks the fit when you talk normally; `delegate` can spawn a child *as* one. | off |
 | **Council** | The cast deliberates on a topic in a clocked round-robin circle (no tools); a scribe writes the outcome — agreements, disagreements, a recommendation. | off |
-| **Workday** | One prompt = one day of the cast: morning briefing over mission + yesterday's debrief, foreman-cut assignments worked by persona children, evening debrief escalated to you and carried into tomorrow — with lessons banked as skills. | off |
+| **Workday** | One prompt = one life of the domain admin, worked by the Nine: briefing, Odin's dispatch, worker children, the owl's handoff, Sveja's deliveries, nightfall and the hawk's roster, the closing debrief that briefs the next day — with Freya banking lessons as skills. | off |
 
 Every toggle is reversible and ships with silent migration — flipping one back
 gives you exactly the prior behaviour.

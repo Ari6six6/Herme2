@@ -72,7 +72,7 @@ def test_router_call_carries_roster_and_request(project, cfg):
     catalog = personas_mod.load_all(project)
     personas_mod.route("audit the parser", catalog, backend, cfg, THINK_RE)
     sent = backend.seen[0]["content"]
-    assert "`owl`" in sent and "`smith`" in sent  # the roster menu
+    assert "`owl`" in sent and "`tor`" in sent  # the roster menu
     assert "audit the parser" in sent
     assert "{{" not in sent  # all placeholders rendered
 

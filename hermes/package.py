@@ -273,16 +273,24 @@ def briefing_member_prompt() -> str:
     return _template("briefing_member.md")
 
 
-def foreman_prompt() -> str:
-    return _template("foreman.md")
+def odin_prompt() -> str:
+    return _template("odin.md")
 
 
 def debrief_member_prompt() -> str:
     return _template("debrief_member.md")
 
 
-def debrief_scribe_prompt() -> str:
-    return _template("debrief_scribe.md")
+def domain_admin_prompt() -> str:
+    return _template("domain_admin.md")
+
+
+def courier_prompt() -> str:
+    return _template("courier.md")
+
+
+def roster_call_prompt() -> str:
+    return _template("roster_call.md")
 
 
 def harvest_prompt() -> str:

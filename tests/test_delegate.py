@@ -135,6 +135,18 @@ def _persona(project, cfg, name="owl"):
     return personas_mod.get(project, name)
 
 
+def _custom_persona(project, cfg, name, header=""):
+    """An operator-authored sheet with a tools/caps header — the Nine carry
+    none, so posture behavior is exercised on a custom file."""
+    from hermes import personas as personas_mod
+    cfg.set("personas_enabled", True)
+    gdir = personas_mod.global_dir()
+    gdir.mkdir(parents=True, exist_ok=True)
+    (gdir / f"{name}.md").write_text(
+        f"a custom sheet\n{header}\nYou are {name}.\n")
+    return personas_mod.get(project, name)
+
+
 def test_persona_child_prompt_appends_voice_after_subagent_header(project, cfg):
     # The overlay must APPEND: the "You are a SUB-AGENT" first line is the
     # contract by which callers (and this file) recognize a child.
@@ -150,7 +162,8 @@ def test_persona_child_prompt_appends_voice_after_subagent_header(project, cfg):
 def test_persona_child_defaults_to_persona_tools(project, cfg):
     backend = RecordingBackend([_call("finish_run", {"summary": "done"})])
     ctx = _parent_ctx(project, cfg, backend)
-    p = _persona(project, cfg, "scribe")  # files only — no shell, no net
+    p = _custom_persona(project, cfg, "quill",  # files only — no shell, no net
+                        "tools: read_file, write_file, list_files, write_note\n")
     subagent.run_child(ctx, "tidy notes", [], cfg, persona=p)
     tools_line = backend.systems[0].splitlines()
     listed = next(l for l in tools_line if l.startswith("Your tools this run:"))
@@ -162,7 +175,8 @@ def test_persona_child_defaults_to_persona_tools(project, cfg):
 def test_explicit_allowed_tools_beat_persona_posture(project, cfg):
     backend = RecordingBackend([_call("finish_run", {"summary": "done"})])
     ctx = _parent_ctx(project, cfg, backend)
-    p = _persona(project, cfg, "scribe")
+    p = _custom_persona(project, cfg, "quill",
+                        "tools: read_file, write_file, list_files, write_note\n")
     subagent.run_child(ctx, "x", ["write_note"], cfg, persona=p)
     listed = next(l for l in backend.systems[0].splitlines()
                   if l.startswith("Your tools this run:"))
@@ -171,7 +185,7 @@ def test_explicit_allowed_tools_beat_persona_posture(project, cfg):
 
 
 def test_persona_max_turns_tightens_child_cap(project, cfg):
-    p = _persona(project, cfg, "owl")
+    p = _custom_persona(project, cfg, "brisk", "max_turns: 14\n")
     assert p.max_turns == 14
     cfg.set("delegate_max_turns", 2)  # the smaller of the two must win
     backend = ScriptBackend([
@@ -227,8 +241,8 @@ def test_persona_child_gated_tool_still_asks_operator(project, cfg):
         _call("finish_run", {"summary": "blocked"}),
     ])
     ctx = _parent_ctx(project, cfg, backend, confirm=deny)
-    p = _persona(project, cfg, "owl")  # owl's posture includes local_shell
-    out = subagent.run_child(ctx, "observe", [], cfg, persona=p)
+    p = _persona(project, cfg, "owl")  # same capacities — caller names the tools
+    out = subagent.run_child(ctx, "observe", ["local_shell"], cfg, persona=p)
     assert calls["n"] == 1
     assert out == "blocked"
 
@@ -242,7 +256,7 @@ def test_roster_block_only_when_both_toggles_on(project, cfg):
     cfg.set("delegate_enabled", True)
     system = package.build_system_prompt(project, {}, cfg)
     assert "## Personas — a cast you can delegate to" in system
-    assert "`owl`" in system and "`smith`" in system
+    assert "`owl`" in system and "`tor`" in system
 
 
 # ---- end to end: parent context grows by only brief + summary ----------------

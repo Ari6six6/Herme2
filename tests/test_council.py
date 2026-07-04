@@ -25,7 +25,7 @@ class SayBackend:
         return ChatResult(content=item)
 
 
-def _cast(project, names=("owl", "smith")):
+def _cast(project, names=("owl", "tor")):
     catalog = personas_mod.load_all(project)
     return [catalog[n] for n in names]
 
@@ -43,9 +43,9 @@ def test_round_robin_order_and_rounds_cap(project, cfg):
         THINK_RE)
     # 2 members x 2 rounds + 1 scribe call, in strict round-robin order
     assert [_speaker(c) for c in backend.calls] == [
-        "owl", "smith", "owl", "smith", "(scribe)"]
+        "owl", "tor", "owl", "tor", "(scribe)"]
     body = transcript.read_text()
-    assert body.index("## round 1 — owl") < body.index("## round 1 — smith") \
+    assert body.index("## round 1 — owl") < body.index("## round 1 — tor") \
         < body.index("## round 2 — owl")
     assert "OUTCOME DOC" in outcome.read_text()
 
@@ -67,7 +67,7 @@ def test_member_prompt_carries_voice_and_roster(project, cfg):
     system = backend.calls[0][0]["content"]
     assert "You are owl" in system or "## Persona — owl" in system
     assert "You are the Owl" in system  # the voice body
-    assert "`smith`" in system  # the roster
+    assert "`tor`" in system  # the roster
     assert "{{" not in system
 
 
