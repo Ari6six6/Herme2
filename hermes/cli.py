@@ -515,6 +515,45 @@ def cmd_directives(cfg, args: str) -> None:
                                             " or enable `directives_enabled`)"))
 
 
+def cmd_retrospect(cfg, args: str) -> None:
+    """Cross-run self-review (feature 9).
+      retrospect            show recent per-run metrics (what the pass reads)
+      retrospect now        force a self-review pass immediately
+    """
+    project = _current_project(cfg)
+    if project is None:
+        print(yellow("no current project"))
+        return
+    if args.strip() == "now":
+        if cfg.get("backend") != "mock" and not _probe_vllm(cfg):
+            print(red("vLLM endpoint not reachable") + dim(" — `gpu serve` first"))
+            return
+        from hermes import retrospect as retrospect_mod
+        from hermes.models import resolve
+        spec = resolve(cfg)
+        think_re = agent._think_re(spec.think_tags)
+        print(dim("reviewing recent runs against the recorded metrics..."))
+        if retrospect_mod.retrospect(project, make_backend(cfg), cfg, think_re):
+            print(green("retrospection banked lessons — see `notes` / `skills`."))
+        else:
+            print(yellow("nothing banked") + dim(" (fewer than 2 measured runs, "
+                         "nothing worth changing, or the pass failed)"))
+        return
+    rows = project.recent_metrics(20)
+    if not rows:
+        print(dim("(no metrics yet — the harness records runs/NNNN/metrics.json "
+                  "per run)"))
+        return
+    for m in rows:
+        line = (f"  run {m.get('run', 0):04d}  turns={m.get('turns', '?'):<3}"
+                f" errors={m.get('tool_errors', 0):<3}"
+                f" stalls={m.get('stall_nudges', 0)}"
+                f" phantom={m.get('phantom_bounces', 0)}"
+                f" verify={m.get('verify_bounces', 0)}+{m.get('verify_failures', 0)}"
+                f" taint={m.get('tainted_turns', 0)}")
+        print(red(line + "  ABORTED") if m.get("aborted") else dim(line))
+
+
 def _common_prefix_len(a: str, b: str) -> int:
     n = min(len(a), len(b))
     i = 0
@@ -703,6 +742,7 @@ HELP = f"""\
 {cyan('directives')} [edit|reconcile]  standing instructions distilled from history
 {cyan('skills')} [show|edit <name>]  the agent's reusable how-to notes
 {cyan('checkpoint')} [restore <id>]  project snapshots before file-mutating turns
+{cyan('retrospect')} [now]      per-run metrics + the cross-run self-review pass
 {cyan('tools')}                 list the agent's tools
 {cyan('gpu')} attach [sshstr] | serve | status | tunnel | down   {dim('(alias: g)')}
 {cyan('host')} add <name> <sshstr> [note] | list | rm <name>     your real servers
@@ -745,6 +785,8 @@ def dispatch(cfg, line: str) -> bool:
         cmd_debug(cfg, rest)
     elif cmd in ("checkpoint", "checkpoints"):
         cmd_checkpoint(cfg, rest)
+    elif cmd == "retrospect":
+        cmd_retrospect(cfg, rest)
     elif cmd in ("mission", "notes", "history", "summaries"):
         cmd_info(cfg, cmd, rest)
     elif cmd == "tools":

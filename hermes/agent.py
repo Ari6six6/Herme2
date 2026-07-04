@@ -177,6 +177,14 @@ def run(project, prompt, cfg, backend, gpu=None, env=None, confirm_fn=None,
     files_touched: list[str] = []
     error_seen = False  # did any tool return ERROR/DENIED this run? (skills-nudge signal)
     pending_taint = False  # did the previous turn pull in untrusted network content?
+    # Per-run metrics (feature 9): counted by the harness as the loop runs, so
+    # the retrospection pass reasons over ground truth, not self-report.
+    tool_errors = 0
+    stall_nudges_used = 0
+    phantom_bounces = 0
+    verify_bounces = 0
+    verify_failures = 0
+    tainted_turns = 0
 
     # The assembled package is the stable prefix lazy compaction must never touch;
     # the live conversation grows past it.
@@ -216,6 +224,7 @@ def run(project, prompt, cfg, backend, gpu=None, env=None, confirm_fn=None,
                 if nudges_left <= 0:
                     break  # final answer
                 nudges_left -= 1
+                stall_nudges_used += 1
                 nudge = package.stall_nudge(repeated)
                 messages.append({"role": "assistant", "content": result.content or ""})
                 messages.append({"role": "user", "content": nudge})
@@ -233,6 +242,7 @@ def run(project, prompt, cfg, backend, gpu=None, env=None, confirm_fn=None,
             turn_tainted = pending_taint
             turn_produced_taint = False
             if turn_tainted:
+                tainted_turns += 1
                 print(magenta("  (tainted context: untrusted content in scope — "
                               "actions this turn need your approval)"))
             for tc in result.tool_calls:
@@ -266,6 +276,7 @@ def run(project, prompt, cfg, backend, gpu=None, env=None, confirm_fn=None,
                 if output.startswith(("ERROR", "DENIED")):
                     consecutive_errors += 1
                     error_seen = True
+                    tool_errors += 1
                 else:
                     consecutive_errors = 0
                     if tc.name in CODE_WRITE_TOOLS:
@@ -283,6 +294,7 @@ def run(project, prompt, cfg, backend, gpu=None, env=None, confirm_fn=None,
                     # Pasted code, wrote nothing, ran nothing — the work lives
                     # only in the reply. Reopen the run and make it real.
                     phantom_nudges_left -= 1
+                    phantom_bounces += 1
                     ctx.finish_summary = None
                     nudge = package.phantom_nudge()
                     messages.append({"role": "user", "content": nudge})
@@ -298,6 +310,7 @@ def run(project, prompt, cfg, backend, gpu=None, env=None, confirm_fn=None,
                     # Changed files but never ran anything — bounce once to make
                     # the agent execute a real verification step before concluding.
                     verify_before_done_left -= 1
+                    verify_bounces += 1
                     ctx.finish_summary = None
                     nudge = package.verify_before_done_nudge()
                     messages.append({"role": "user", "content": nudge})
@@ -319,6 +332,7 @@ def run(project, prompt, cfg, backend, gpu=None, env=None, confirm_fn=None,
                         cfg.get("verify_max_turns", 6), think_re=think_re,
                     )
                     if not passed:
+                        verify_failures += 1
                         ctx.finish_summary = None
                         nudge = package.verify_failed(report)
                         messages.append({"role": "user", "content": nudge})
@@ -379,8 +393,38 @@ def run(project, prompt, cfg, backend, gpu=None, env=None, confirm_fn=None,
     (run_dir / "summary.md").write_text(summary + "\n")
     if final_text:
         (run_dir / "final.md").write_text(final_text + "\n")
+    # Per-run metrics (feature 9): what the harness itself observed, recorded
+    # unconditionally like the transcript. The retrospection pass (and the
+    # operator, via `retrospect`) reads these as ground truth about how runs
+    # actually went — numbers the model can't embellish.
+    metrics = {
+        "run": run_id,
+        "ts": time.strftime("%Y-%m-%d %H:%M"),
+        "turns": turns,
+        "aborted": aborted,
+        "tool_calls": len(tool_names_used),
+        "tool_errors": tool_errors,
+        "stall_nudges": stall_nudges_used,
+        "phantom_bounces": phantom_bounces,
+        "verify_bounces": verify_bounces,
+        "verify_failures": verify_failures,
+        "tainted_turns": tainted_turns,
+        "tools": sorted(set(tool_names_used)),
+    }
+    (run_dir / "metrics.json").write_text(json.dumps(metrics, indent=2) + "\n")
     status = red("aborted") if aborted else green("complete")
     print(f"\n{dim(f'[run {run_id:04d}')} {status} {dim(f'— {turns} turn(s)]')}")
+
+    # Retrospection (feature 9): every N runs, a fresh-context pass reviews the
+    # recorded metrics + summaries of recent runs (including this one, just
+    # written) and banks recurring lessons as notes/skills. A failed pass is a
+    # no-op — the run's result above already stands.
+    if cfg.get("retrospect_enabled", False) and not backend_dead:
+        from hermes import retrospect as retrospect_mod
+        if retrospect_mod.maybe_retrospect(
+            project, backend, cfg, run_id, think_re=think_re, log=log,
+        ):
+            print(magenta("  (retrospection — banked lessons from recent runs)"))
     return RunResult(run_id, summary, final_text, turns, aborted)
 
 

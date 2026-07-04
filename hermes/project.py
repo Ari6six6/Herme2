@@ -178,6 +178,29 @@ class Project:
                     return int(d.name), text
         return None
 
+    def recent_metrics(self, k: int) -> list[dict]:
+        """Harness-recorded per-run metrics (runs/NNNN/metrics.json), oldest
+        first. Runs predating the metrics file, or with a corrupt one, are
+        skipped — so the list may be shorter than k."""
+        if not self.runs_dir.exists():
+            return []
+        dirs = sorted(
+            (d for d in self.runs_dir.iterdir() if d.is_dir() and d.name.isdigit()),
+            key=lambda d: int(d.name),
+        )
+        out = []
+        for d in dirs[-k:]:
+            path = d / "metrics.json"
+            if not path.exists():
+                continue
+            try:
+                data = json.loads(path.read_text())
+            except (json.JSONDecodeError, OSError):
+                continue
+            if isinstance(data, dict):
+                out.append(data)
+        return out
+
     def recent_summaries(self, k: int) -> list[tuple[int, str]]:
         if not self.runs_dir.exists():
             return []

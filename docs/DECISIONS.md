@@ -208,3 +208,38 @@ and the alternative I passed on. Newest at the bottom of each feature.
 - **Extensible for the Docker/browser phase.** When sandboxed-runtime output tools
   arrive, adding their names to `TAINTING_TOOLS` extends the rail with no other
   change — the reason the set is a single named constant.
+
+## Feature 9 — Retrospection (recursive self-improvement)
+
+- **Grounded in harness-recorded metrics, not self-report.** Every run writes
+  `runs/NNNN/metrics.json` — turns, aborts, tool errors, stall/phantom/verify
+  bounces, tainted turns — counted by the harness while it ran the loop. The
+  reflection pass reasons over those numbers plus the summaries; it can't
+  embellish what it didn't author. Same philosophy as verification: the doer
+  doesn't grade its own homework, so the grader gets ground truth. Alternative:
+  let the pass reread transcripts and judge for itself. Rejected — N transcripts
+  don't fit a side-call budget, and a model grading its own prose is exactly the
+  verification-theater failure the harness exists to prevent.
+- **Metrics recording is unconditional** (like transcripts) — it's
+  observability, not behaviour; a few hundred bytes per run, useful to the
+  operator (`retrospect` lists them) even with the pass off. Only the *pass*
+  is behind flags, per the default-off posture.
+- **The write surface is the agent's own assets only.** `write_note` always;
+  `load_skill`/`write_skill` only when `skills_enabled` — a skill written into
+  a system that never indexes it would be a false improvement, so the pass's
+  toolset shrinks to what actually recirculates into future packages. No
+  shells, no network, no mission/persona/directives: self-improvement never
+  touches operator files or the world. The recursion is real (notes and skills
+  feed every future package) but the blast radius is two plain-text dirs.
+- **The pass's confirm always denies.** Everything registered for it is free,
+  but if a gated tool ever slips into its registry, an unattended reflection
+  pass must fail closed, never self-approve.
+- **Stateless trigger (`run_id % N`), like reconciliation** — no marker file to
+  desync; `retrospect now` covers urgency. Needs ≥2 measured runs before it
+  will run: one run has no pattern in it.
+- **Fresh context, not the run's tail.** The skills nudge (feature 3) already
+  reflects on one run in-context; the cross-run layer must see runs side by
+  side, cheaply — compact metrics lines + summaries, one message.
+- **A failed pass is a no-op** (transport error, nothing banked, budget
+  exhausted) — losing a reflection is never a correctness problem for the run
+  that hosted it, so it can never bounce or block a finish.

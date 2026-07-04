@@ -67,6 +67,14 @@ DEFAULTS: dict = {
     # before a task is reported done. Adds a header rule + a one-shot harness
     # nudge when a file-mutating run finishes without running anything.
     "verify_before_done": False,
+    # Retrospection (feature 9): every N runs, a bounded fresh-context pass
+    # reviews the harness-recorded per-run metrics + its own summaries and banks
+    # recurring lessons as notes (and skills, when skills are on). Its only
+    # write surface is the agent's own assets — never mission/persona/directives.
+    "retrospect_enabled": False,
+    "retrospect_every_runs": 5,
+    "retrospect_window": 10,  # how many recent runs one pass reviews
+    "retrospect_max_turns": 4,  # tool-call budget for one pass
     "allow_gpu_network": False,  # False: box may install/build (net), but raw egress goes via the phone; True: unrestricted box net
     "max_model_len": 0,  # 0 = pick automatically from detected VRAM
     "gpu_port": 8000,

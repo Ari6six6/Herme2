@@ -28,7 +28,9 @@ cli.py (REPL)
               ├─ finish_run sets ctx.finish_summary → loop ends
               ├─ nudges: stall / phantom / verify-before-done
               └─ on a code finish (GPU attached): an independent verifier pass re-runs the code
-        └─ writes runs/NNNN/{summary.md, final.md, transcript.jsonl}
+        └─ writes runs/NNNN/{summary.md, final.md, transcript.jsonl, metrics.json}
+              └─ every Nth run (when enabled): retrospection — a fresh-context pass over
+                 recent metrics + summaries that banks lessons via write_note/write_skill
 ```
 
 ### Projects — the unit of memory (`hermes/project.py`)
@@ -43,6 +45,7 @@ runs/NNNN/
     summary.md      the agent's own handoff summary for that run
     final.md        the agent's final prose reply, verbatim
     transcript.jsonl full turn-by-turn log (not re-injected)
+    metrics.json    harness-counted run stats (turns, aborts, errors, bounces)
 tools/              forged tools + .equipped.json + .approved.json
 workspace/          the agent's file area (real work lands here)
 ```
