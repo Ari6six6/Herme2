@@ -5,9 +5,13 @@ and the alternative I passed on. Newest at the bottom of each feature.
 
 ## Global
 
-- **No new dependencies.** Everything so far is Python stdlib plus the two deps
-  the app already had (`httpx`, `prompt_toolkit`). Any new dependency gets a line
-  here first.
+- **Dependencies are permitted but expensive.** The app shipped on stdlib plus
+  `httpx` and `prompt_toolkit`. New deps are now allowed, but each must (a) be
+  pure-Python or have aarch64-linux wheels (this installs on Termux/ARM — the
+  `openai` SDK was rejected over a Rust wheel, and that bar stands), (b) prefer
+  an optional import that degrades to a clear ERROR, and (c) earn a
+  justification line below. Kept out of the core `dependencies` list; test-only
+  deps live in the `dev` extra.
 - **Every feature behind a config flag in `config.py::DEFAULTS`.** Defaults off,
   except checkpointing and the directive header line (per the brief).
 
@@ -283,3 +287,30 @@ library additions, not numbered features: they follow the toolbox precedent
   arg and `add`/`diff` `path` are path-checked, so an operation can't reach a git
   dir or stage a file outside the project. Same path-escape defense as the file
   tools.
+
+### `html_to_text` + `pdf_text` — the document reader
+
+- **Both are LOCAL: `src` (project file) or inline `text`, never a URL.** This is
+  the load-bearing decision. `http_request`/`download_file` already bring content
+  in and are where the taint rail applies; an extractor that also fetched would be
+  a *second* network ingress, dragging it into `TAINTING_TOOLS` and an `agent.py`
+  touch. Transforming bytes already on disk keeps each tool a pure local function
+  that inherits the existing taint story for free. (Note: `extract_code` does take
+  a `url` and fetch — a pre-existing shape I deliberately did not copy here.)
+- **One dependency, only where stdlib can't reach: `pypdf` for `pdf_text`.**
+  Justification: parsing the PDF binary format has no stdlib path. pypdf is pure
+  Python (its only hard dep is `typing_extensions`; `cryptography`/`Pillow` are
+  optional extras it degrades away from), so it installs on aarch64/Termux and
+  clears the Rust-wheel bar. What it buys: reading downloaded PDFs — a common
+  "here's the paper/manual" case. **Rejected `html2text`** for the HTML side:
+  `html.parser` (stdlib) produces clean readable text for a small model without a
+  second dependency, so `html_to_text` adds none. pypdf lives in the `dev` extra
+  for tests; at runtime it's an **optional import** — absent (or half-installed),
+  `pdf_text` returns a clear `pip install pypdf` ERROR instead of failing the run.
+- **`import pypdf` is guarded against any exception, not just `ImportError`.**
+  A half-installed optional backend (e.g. a broken `cryptography`) can make pypdf
+  panic at import rather than raise `ImportError`; catching broadly keeps the tool
+  degrading cleanly wherever it's run.
+- **Extractors write only to the workspace (`dest`), read from the project
+  (`src`).** Same split as `base64_codec`/`extract_code`: read anywhere in the
+  project, write only under `workspace/`, both path-checked.
