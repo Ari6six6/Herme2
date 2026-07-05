@@ -228,7 +228,7 @@ tiers.
 | tool | runs on | gate |
 |---|---|---|
 | read/write/edit/list files | VPS, project dir | free inside the project |
-| `local_shell` | VPS | **always asks you y/n** |
+| `local_shell` | VPS | reads free; anything mutating asks y/n |
 | `remote_shell`, `remote_read/write` | GPU box | free — it's the sandbox; network commands blocked |
 | `host_shell`, `host_read/write` | **your servers** | reads free; anything mutating asks y/n |
 | `http_request`, `web_search` | VPS | GET free; POST etc. ask you |

@@ -58,3 +58,29 @@ def test_cwd_outside_project_denied(project, cfg, yes):
         ctx,
     )
     assert out.startswith("DENIED")
+
+
+# ---- read-only commands run free, same tier as host_shell --------------------
+def test_read_only_command_skips_confirm(project, cfg, never):
+    registry, ctx = _ctx(project, cfg, never)
+    out = registry.dispatch("local_shell", json.dumps({"command": "ls"}), ctx)
+    assert "exit code 0" in out
+
+
+def test_non_read_only_command_still_confirms(project, cfg):
+    calls = []
+
+    def confirm(action, detail="", viewable=None):
+        calls.append(action)
+        return True
+
+    registry, ctx = _ctx(project, cfg, confirm)
+    out = registry.dispatch("local_shell", json.dumps({"command": "echo hi > f.txt"}), ctx)
+    assert len(calls) == 1
+    assert "exit code 0" in out
+
+
+def test_declining_non_read_only_command_denies(project, cfg, no):
+    registry, ctx = _ctx(project, cfg, no)
+    out = registry.dispatch("local_shell", json.dumps({"command": "rm -rf workspace"}), ctx)
+    assert out == "DENIED by operator."

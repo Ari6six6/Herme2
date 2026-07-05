@@ -114,9 +114,11 @@ tool's body as an explicit `ctx.confirm(...)` call or the absence of one:
 
 - **Auto-run (no prompt):** in-project `read_file`/`write_file`/`edit_file`/
   `list_files`; `http_request` GET/HEAD; `web_search`; `remote_*` (the GPU box is
-  the agent's sandbox); `write_note`; the meta tools.
-- **Owner-confirmed:** `local_shell` (always); `http_request` non-GET/HEAD;
-  `forge_tool`; host writes; reading outside the project dir.
+  the agent's sandbox); `write_note`; the meta tools; `local_shell`/`host_shell`
+  commands the read-only classifier (`hermes/tools/readonly.py`) vouches for.
+- **Owner-confirmed:** `local_shell`/`host_shell` commands not classified
+  read-only; `http_request` non-GET/HEAD; `forge_tool`; host writes; reading
+  outside the project dir.
 - **Denied outright:** writes outside the project dir.
 
 `confirm()` is the single chokepoint — prints the action, waits y/n/v (v = view

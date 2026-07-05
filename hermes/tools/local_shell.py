@@ -1,20 +1,27 @@
-"""Local shell on the phone (Termux). ALWAYS operator-confirmed."""
+"""Local shell on the phone (Termux). Read-only commands (see
+hermes.tools.readonly) run free, same tier as host_shell; anything not
+positively classified read-only is operator-confirmed — this is still the
+most privileged surface (the box the harness itself runs on), so the classifier
+fails closed exactly as it does for managed hosts."""
 
 from __future__ import annotations
 
 import subprocess
 
 from hermes.tools.base import obj_schema, tool
+from hermes.tools.readonly import classify
+from hermes.ui import dim
 
 
 @tool(
     "local_shell",
-    "Run a shell command on the operator's phone (Termux). The operator sees "
-    "the exact command and must approve it. Use for: running scripts you "
-    "wrote for the phone, installing Termux packages, anything local. "
-    "Runs at the project root by default, so paths match the file tools: a "
-    "file you wrote as `workspace/x.py` is run with `python workspace/x.py` "
-    "(no `cd workspace` first). Pass `cwd` to start somewhere else.",
+    "Run a shell command on the operator's phone (Termux). Read-only commands "
+    "run freely; anything else pauses for operator y/n. Use for: running "
+    "scripts you wrote for the phone, installing Termux packages, anything "
+    "local. Runs at the project root by default, so paths match the file "
+    "tools: a file you wrote as `workspace/x.py` is run with `python "
+    "workspace/x.py` (no `cd workspace` first). Pass `cwd` to start somewhere "
+    "else.",
     obj_schema(
         {
             "command": {"type": "string", "description": "exact shell command"},
@@ -35,8 +42,12 @@ def local_shell(args, ctx):
             cwd = resolve_in(ctx.project.root, args["cwd"])
         except PathDenied:
             return "DENIED: cwd outside the project directory."
-    if not ctx.confirm("agent wants to run a LOCAL shell command on the phone:",
-                       detail=f"  $ {command}\n  (cwd: {cwd}, timeout: {timeout}s)"):
+    read_only, reason = classify(command)
+    if read_only:
+        print(dim(f"  [local] $ {command}"))
+    elif not ctx.confirm("agent wants to run a LOCAL shell command on the phone:",
+                         detail=f"  $ {command}\n  (cwd: {cwd}, timeout: {timeout}s)"
+                                f"\n  (not classified read-only: {reason})"):
         return "DENIED by operator."
     try:
         proc = subprocess.run(

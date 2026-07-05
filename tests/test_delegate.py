@@ -66,7 +66,8 @@ def test_child_cannot_exceed_parent_tools(project, cfg):
 
 
 def test_child_gated_tool_still_asks_operator(project, cfg):
-    # local_shell is owner-confirmed. A DENY inside the child must be honoured.
+    # A non-read-only local_shell command is owner-confirmed. A DENY inside
+    # the child must be honoured.
     calls = {"n": 0}
 
     def deny(*a, **k):
@@ -74,7 +75,7 @@ def test_child_gated_tool_still_asks_operator(project, cfg):
         return False
 
     backend = ScriptBackend([
-        _call("local_shell", {"command": "echo hi"}),  # will be DENIED
+        _call("local_shell", {"command": "echo hi > f.txt"}),  # will be DENIED
         _call("finish_run", {"summary": "operator blocked the shell"}),
     ])
     ctx = _parent_ctx(project, cfg, backend, confirm=deny)
