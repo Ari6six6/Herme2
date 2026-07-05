@@ -460,8 +460,15 @@ systemctl stop "${ROLLBACK_UNIT}.timer" 2>/dev/null || true
 systemctl reset-failed "${ROLLBACK_UNIT}".* 2>/dev/null || true
 ok "dead-man's-switch cancelled — firewall is now permanent"
 
-# Persist a snapshot as a secondary safeguard (boot service is primary).
-netfilter-persistent save >/dev/null 2>&1 || true
+# The killswitch systemd service is the SINGLE source of truth: it runs
+# before network-pre.target on every boot and rebuilds the ruleset from
+# scratch (re-resolving the WG endpoint). Do NOT persist a netfilter
+# snapshot — it would be stale the moment the endpoint IP changes, and it
+# restores AFTER the killswitch service in boot order, clobbering the fresh
+# fail-closed rules with the stale snapshot. Disable it so it can never
+# fight the killswitch, and drop any snapshot a prior run may have written.
+systemctl disable --now netfilter-persistent >/dev/null 2>&1 || true
+rm -f /etc/iptables/rules.v4 /etc/iptables/rules.v6 2>/dev/null || true
 
 # ===========================================================================
 # 8. Install Hermes for the invoking user
