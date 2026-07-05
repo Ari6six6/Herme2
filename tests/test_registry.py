@@ -76,6 +76,19 @@ def test_host_tools_registered_only_with_hosts(project, cfg, yes):
         assert name in registry2.names()
 
 
+def test_build_project_withholds_gpu_box_tools(project, cfg, yes):
+    # A plain project gets the GPU box as its compute sandbox.
+    assert "remote_shell" in build_registry(project, cfg, yes).names()
+    # Once it's a build project (a twin exists), reconstruction happens in the VPS
+    # twin container: the GPU-box tools are withheld so the agent can't fall back
+    # to building bare-metal on the box, and it gets build_run instead.
+    project.twin().init(source="https://api.example.com")
+    names = build_registry(project, cfg, yes).names()
+    for gone in ("remote_shell", "remote_read", "remote_write"):
+        assert gone not in names
+    assert "build_run" in names
+
+
 def test_forge_approve_and_persist(project, cfg, yes):
     registry = build_registry(project, cfg, yes)
     ctx = _ctx(project, cfg, yes, registry)

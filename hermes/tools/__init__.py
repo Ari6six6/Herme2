@@ -199,7 +199,16 @@ def build_registry(project, cfg, confirm_fn) -> ToolRegistry:
     sealed = twin_model.is_sealed()
     live_touch = (not sealed) or cfg.get("build_live_touch", False)
 
-    for module in (local_fs, local_shell, remote, meta):
+    # The GPU box (remote_shell/read/write) is the compute sandbox for PLAIN
+    # projects. In a BUILD project the sandbox is the VPS twin container
+    # (build_run / the twin tools), so the GPU box — and its network egress — is
+    # out of the loop entirely: withhold the remote_* tools so the agent cannot
+    # reconstruct on the box even if a container step fails. It builds in the
+    # container or not at all; there is no bare-metal-on-the-box fallback to take.
+    base_modules = [local_fs, local_shell, meta]
+    if not twin_model.exists():
+        base_modules.append(remote)
+    for module in base_modules:
         for t in module.TOOLS:
             registry.register(t)
     if live_touch:
