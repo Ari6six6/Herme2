@@ -303,9 +303,12 @@ iptables -P FORWARD DROP
 # Tag NEW inbound SSH connections on the real NIC with the wg fwmark...
 iptables -t mangle -A PREROUTING -i "$WAN_IF" -p tcp --dport "$SSH_PORT" \
   -m conntrack --ctstate NEW -j CONNMARK --set-mark "$WG_FWMARK"
-# ...and restore that connmark onto every locally-generated reply packet, so
-# SSH replies carry fwmark 51820 -> bypass table 51820 -> exit the real NIC.
-iptables -t mangle -A OUTPUT -j CONNMARK --restore-mark
+# ...and restore that connmark onto locally-generated SSH reply packets, so
+# they carry fwmark 51820 -> bypass table 51820 -> exit the real NIC.
+# SSH replies ONLY: an unrestricted restore-mark wipes the fwmark WireGuard
+# sets on its own encrypted UDP (their connmark is 0), rerouting them back
+# into wg0 in an infinite encrypt-loop that black-holes the tunnel.
+iptables -t mangle -A OUTPUT -p tcp --sport "$SSH_PORT" -j CONNMARK --restore-mark
 
 # --- filter: loopback + established --------------------------------------
 iptables -A INPUT  -i lo -j ACCEPT
