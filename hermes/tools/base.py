@@ -49,6 +49,11 @@ class ToolContext:
     served_ctx: int = 0
     finish_summary: str | None = None
     notices: list[str] = field(default_factory=list)
+    # Domains the owner has approved for reads during a tainted turn (feature 8
+    # refinement): once granted, GET/HEAD http_request calls to that domain don't
+    # re-prompt for the rest of the run. State-changing requests and new domains
+    # still always confirm.
+    approved_domains: set = field(default_factory=set)
     # Subagent delegation (feature 4): the child loop needs the model + reasoning
     # tags to run, and its depth so recursion can be capped.
     backend: object | None = None
