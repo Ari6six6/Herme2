@@ -414,6 +414,13 @@ if [[ -n "$WG_CONF_SRC" ]]; then
   cat "$WG_CONF_SRC" >"$WG_CONF_DEST"
   chmod 0600 "$WG_CONF_DEST"
 
+  # v4-only config means IPv6 was disabled in 5d — strip ::/0 from AllowedIPs
+  # or wg-quick will try to install a v6 route and fail with
+  # "IPv6 is disabled on nexthop device".
+  if [[ "$WG_HAS_V6" -eq 0 ]]; then
+    sed -i 's|,[[:space:]]*::/0||g; s|::/0[[:space:]]*,[[:space:]]*||g' "$WG_CONF_DEST"
+  fi
+
   # Inject our PostUp/PreDown hooks under [Interface] if not already present.
   if ! grep -q "$KILLSWITCH_SH up" "$WG_CONF_DEST"; then
     awk -v hook="$KILLSWITCH_SH" '
