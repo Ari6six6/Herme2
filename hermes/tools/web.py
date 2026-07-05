@@ -14,6 +14,7 @@ from urllib.parse import parse_qs, unquote, urlparse
 
 import httpx
 
+from hermes import http_policy
 from hermes.tools.base import obj_schema, tool
 
 MAX_BODY_CHARS = 20000
@@ -71,7 +72,8 @@ def http_request(args, ctx):
     method = (args.get("method") or "GET").upper()
     if not url.startswith(("http://", "https://")):
         return "ERROR: url must start with http:// or https://"
-    if method not in ("GET", "HEAD"):
+    domain = urlparse(url).netloc.lower()
+    if method not in ("GET", "HEAD") and not http_policy.is_allowed(ctx.cfg, domain, method):
         detail = f"  {method} {url}"
         if args.get("body"):
             detail += f"\n  body: {str(args['body'])[:500]}"
