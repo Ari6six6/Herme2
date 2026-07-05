@@ -24,3 +24,10 @@ def host_or_error(ctx, name: str):
         return (f"ERROR: no managed host '{name}'. Known hosts: {known}. "
                 f"The operator registers one with: host add <name> <ssh-string>")
     return ep
+
+
+def twin_for(ctx):
+    """The TwinModel for the current project (shared by the recon/build and
+    sealed-twin tool modules)."""
+    from hermes.twin.model import TwinModel
+    return TwinModel.for_project(ctx.project)

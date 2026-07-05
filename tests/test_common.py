@@ -1,10 +1,11 @@
 """The shared tool guards in hermes.tools._common — one source of truth for the
-"no GPU box" / "unknown host" errors that several tool modules used to
-hand-roll."""
+"no GPU box" / "unknown host" errors and the twin lookup that several tool
+modules used to hand-roll."""
 
 from types import SimpleNamespace
 
-from hermes.tools._common import host_or_error, need_gpu
+from hermes.tools._common import host_or_error, need_gpu, twin_for
+from hermes.twin.model import TwinModel
 
 
 def test_need_gpu_reports_when_absent():
@@ -27,3 +28,10 @@ def test_host_or_error_returns_endpoint():
     ep = object()
     ctx = SimpleNamespace(hosts={"web": ep})
     assert host_or_error(ctx, "web") is ep
+
+
+def test_twin_for_points_at_project_twin_dir(project):
+    ctx = SimpleNamespace(project=project)
+    twin = twin_for(ctx)
+    assert isinstance(twin, TwinModel)
+    assert twin.root == project.twin_dir

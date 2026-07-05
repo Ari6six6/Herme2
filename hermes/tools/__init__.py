@@ -184,11 +184,26 @@ def toolbox_catalog() -> str:
 def build_registry(project, cfg, confirm_fn) -> ToolRegistry:
     from hermes import hosts as hosts_mod
     from hermes.tools import local_fs, local_shell, meta, remote, web
+    from hermes.twin.model import TwinModel
 
     registry = ToolRegistry()
 
-    for module in (local_fs, local_shell, remote, meta, web):
+    # The seal is the phase boundary, and (by default) the network boundary too.
+    # OPEN (recon/build, "pure scanning") and plain non-twin projects can reach
+    # the live world. Once SEALED — the phase where the agent writes/runs code
+    # against the twin — live reach is cut off completely unless the operator
+    # explicitly turns it back on (`config set build_live_touch true`): no
+    # http_request/web_search, no twin_expand/twin_reground. `run` then has no
+    # path to anything but the twin at all, by construction, not by prompt.
+    twin_model = TwinModel(project.twin_dir)
+    sealed = twin_model.is_sealed()
+    live_touch = (not sealed) or cfg.get("build_live_touch", False)
+
+    for module in (local_fs, local_shell, remote, meta):
         for t in module.TOOLS:
+            registry.register(t)
+    if live_touch:
+        for t in web.TOOLS:
             registry.register(t)
 
     # Skills (feature 3): load_skill/write_skill, only when the owner turns the
@@ -214,6 +229,26 @@ def build_registry(project, cfg, confirm_fn) -> ToolRegistry:
 
         for t in hosts_tools.TOOLS:
             registry.register(t)
+
+    # While OPEN we're in the builder phase: the agent gets the builder tools to
+    # record the target and reconstruct it. Once SEALED, the build phase begins:
+    # the frozen twin to work against, plus (only if live_touch) the narrow,
+    # read-only tools that can still reach the live target. (Deeper target
+    # reconnaissance is not a built-in tool; it lives in the external herme-recon
+    # program, reached via the recon skill through local_shell.)
+    if twin_model.exists() and not sealed:
+        from hermes.tools import builder as builder_tools
+
+        for t in builder_tools.TOOLS:
+            registry.register(t)
+    elif sealed:
+        from hermes.tools import twin as twin_tools
+
+        for t in twin_tools.ALWAYS_TOOLS:
+            registry.register(t)
+        if live_touch:
+            for t in twin_tools.LIVE_TOUCH_TOOLS:
+                registry.register(t)
 
     # Equipped library tools (shipped with the app — trusted).
     lib = registry.library_tools()

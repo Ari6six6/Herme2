@@ -30,27 +30,36 @@ CODE_WRITE_TOOLS = frozenset({"write_file", "edit_file", "remote_write"})
 # aren't covered by a project snapshot.
 FILE_MUTATING_TOOLS = frozenset({"write_file", "edit_file", "forge_tool", "write_skill"})
 
-# What counts as the verifier having REALLY exercised something — running the
-# solution. A passive read (read_file, remote_read, ...) is not evidence: author
-# and critic share the same weights, so a PASS backed only by a read is the critic
-# just eyeballing the code and agreeing.
+# In build mode, checking your work against the twin means actually exercising it —
+# replaying its ground-truth response (twin_request) or re-checking a request
+# against the live target (twin_reground). Finishing a code change without ever
+# doing this is the "told my guy it worked and pissed off" move — the one thing
+# the build is built to prevent.
+BUILD_PROOF_TOOLS = frozenset({"twin_request", "twin_reground"})
+
+# What counts as the antithesis having REALLY exercised something — running the
+# solution or querying the twin. A passive read (read_file, remote_read,
+# twin_map, ...) is not evidence: in build mode a VERDICT: PASS backed only by a
+# read is collusion theater (the critic just eyeballed the code and agreed).
 VERIFY_EVIDENCE_TOOLS = frozenset({
-    "remote_shell", "local_shell", "host_shell",
+    "remote_shell", "local_shell", "host_shell", "build_run", "twin_request",
 })
 
 # Tools that actually EXECUTE something (vs. just reading/writing) — the evidence
 # that a verification step really happened this run (feature 7).
 EXECUTION_TOOLS = frozenset({
-    "local_shell", "remote_shell", "host_shell", "http_request",
+    "local_shell", "remote_shell", "host_shell", "build_run", "twin_request",
+    "http_request",
 })
 
-# Tools whose output enters context FROM THE NETWORK — i.e. untrusted data
-# (feature 8). When the Docker/browser sandbox lands, its runtime-output tools
-# join this set. Any turn whose immediate inputs came from one of these is
-# "tainted": its tool calls can't use the auto-approved tier and always require
-# owner permission. This is the prompt-injection rail — not configurable off.
+# Tools whose output enters context FROM THE NETWORK (or the live target) — i.e.
+# untrusted data (feature 8). When the Docker/browser sandbox lands, its
+# runtime-output tools join this set. Any turn whose immediate inputs came from
+# one of these is "tainted": its tool calls can't use the auto-approved tier and
+# always require owner permission. This is the prompt-injection rail — not
+# configurable off.
 TAINTING_TOOLS = frozenset({
-    "http_request", "web_search",
+    "http_request", "web_search", "twin_expand", "twin_reground",
 })
 
 # A fenced, multi-line code block in the final answer: ```lang\n...\n```
@@ -106,7 +115,7 @@ def run(project, prompt, cfg, backend, gpu=None, env=None, confirm_fn=None,
         sandbox=None):
     """Execute one agent run. `env` carries gpu_status / remote_workspace /
     context_window for the package; `gpu` is an SSHEndpoint or None; `sandbox` is
-    the VPS sandbox-host SSHEndpoint or None."""
+    the VPS sandbox-host SSHEndpoint (where the runtime twin lives) or None."""
     if confirm_fn is None:
         from hermes.confirm import confirm as confirm_fn
 
@@ -157,6 +166,12 @@ def run(project, prompt, cfg, backend, gpu=None, env=None, confirm_fn=None,
     max_turns = cfg.get("max_turns", 20)
     nudges_left = cfg.get("stall_nudges", 2)
     phantom_nudges_left = cfg.get("phantom_nudges", 1)
+    # Build mode = this project has a sealed twin to prove work against.
+    try:
+        twin_sealed = project.twin().is_sealed()
+    except Exception:
+        twin_sealed = False
+    build_proof_nudges_left = cfg.get("build_proof_nudges", 1) if twin_sealed else 0
     # Verification enforcement (feature 7): a one-shot nudge when a file-mutating
     # run finishes without having executed anything. Cheap, no sandbox needed.
     verify_before_done_left = 1 if cfg.get("verify_before_done", False) else 0
@@ -178,8 +193,18 @@ def run(project, prompt, cfg, backend, gpu=None, env=None, confirm_fn=None,
     error_seen = False  # did any tool return ERROR/DENIED this run? (skills-nudge signal)
     pending_taint = False  # did the previous turn pull in untrusted network content?
 
-    # The assembled package is the stable prefix lazy compaction must never touch;
-    # the live conversation grows past it.
+    # Planner (build mode): before any code is written, an independent pass lays
+    # out an ordered checklist the builder executes against and the antithesis
+    # checks. On by default for sealed-twin tasks; off via `plan_build_tasks`.
+    if twin_sealed and cfg.get("plan_build_tasks", True):
+        print(magenta("  (planner — laying out the checklist before building)"))
+        plan = _plan(backend, prompt, project, think_re)
+        if plan:
+            messages.append({"role": "user", "content": package.plan_brief(plan)})
+            log({"role": "planner", "content": plan})
+
+    # Everything assembled so far (package + any planner brief) is the stable
+    # prefix lazy compaction must never touch; the live conversation grows past it.
     stable_prefix = len(messages)
     schema_chars = len(json.dumps(registry.schemas()))
     context_window = env.get("context_window") or ctx.served_ctx
@@ -291,6 +316,22 @@ def run(project, prompt, cfg, backend, gpu=None, env=None, confirm_fn=None,
                                  "run — bouncing back to actually do it)"))
                     continue
                 if (
+                    build_proof_nudges_left > 0
+                    and (set(tool_names_used) & CODE_WRITE_TOOLS)
+                    and not (set(tool_names_used) & BUILD_PROOF_TOOLS)
+                ):
+                    # Build mode: changed code but never checked it against the
+                    # twin. That's the "tell my guy it worked and piss off" move.
+                    # Send it back to prove parity with a real query, not a claim.
+                    build_proof_nudges_left -= 1
+                    ctx.finish_summary = None
+                    nudge = package.build_proof_nudge()
+                    messages.append({"role": "user", "content": nudge})
+                    log({"role": "user", "content": nudge})
+                    print(red("  (build: code changed but never run against the "
+                              "twin — sending it back to PROVE it, not claim it)"))
+                    continue
+                if (
                     verify_before_done_left > 0
                     and (set(tool_names_used) & FILE_MUTATING_TOOLS)
                     and not (set(tool_names_used) & EXECUTION_TOOLS)
@@ -313,20 +354,50 @@ def run(project, prompt, cfg, backend, gpu=None, env=None, confirm_fn=None,
                     # returns a verdict the doer can't fake.
                     verify_rounds_left -= 1
                     print(magenta(
+                        "  (antithesis — breaking the solution against the twin)"
+                        if twin_sealed else
                         "  (independent verification — re-running the code in the sandbox)"))
                     passed, report = _verify(
                         backend, registry, ctx, prompt, files_touched, log,
-                        cfg.get("verify_max_turns", 6), think_re=think_re,
+                        cfg.get("verify_max_turns", 6), build=twin_sealed,
+                        think_re=think_re,
                     )
                     if not passed:
+                        if (twin_sealed and verify_rounds_left == 0
+                                and cfg.get("referee_on_deadlock", True)):
+                            # Deadlock: out of verify rounds and the antithesis is
+                            # still failing the solution the doer keeps finishing.
+                            # The referee makes the binding call with fresh eyes,
+                            # instead of silently accepting an unverified finish.
+                            print(magenta("  (referee — builder and antithesis "
+                                          "deadlocked; making the final call)"))
+                            ref_passed, ref_report = _referee(
+                                backend, registry, ctx, prompt, files_touched,
+                                report, log, cfg.get("verify_max_turns", 6),
+                                think_re=think_re,
+                            )
+                            if ref_passed:
+                                print(green("  (referee ruled the solution holds "
+                                            "— accepting)"))
+                                break
+                            ctx.finish_summary = None
+                            nudge = package.referee_failed(ref_report)
+                            messages.append({"role": "user", "content": nudge})
+                            log({"role": "user", "content": nudge})
+                            print(red("  (referee upheld the failure — back to fix it)"))
+                            continue
                         ctx.finish_summary = None
                         nudge = package.verify_failed(report)
                         messages.append({"role": "user", "content": nudge})
                         log({"role": "user", "content": nudge})
-                        print(red("  (verification FAILED — sending it back to fix "
+                        print(red("  (antithesis BROKE it — sending it back to fix "
+                                  "the real problem)" if twin_sealed else
+                                  "  (verification FAILED — sending it back to fix "
                                   "the real problem)"))
                         continue
-                    print(green("  (verification PASSED — the code actually runs)"))
+                    print(green("  (antithesis could not break it — it holds against "
+                                "the twin)" if twin_sealed else
+                                "  (verification PASSED — the code actually runs)"))
                 break
             if consecutive_errors >= MAX_CONSECUTIVE_ERRORS:
                 print(yellow("  (circuit breaker: too many consecutive tool errors)"))
@@ -495,6 +566,20 @@ def _arg(arguments: str, key: str):
     return value if isinstance(value, str) else None
 
 
+def _plan(backend, request, project, think_re=THINK_RE) -> str:
+    """A pre-thesis pass: turn the mission + request into an ordered checklist the
+    builder executes against. No tools — it only thinks and writes the plan.
+    Returns "" on any failure so a missing plan never blocks the run."""
+    try:
+        result = backend.chat([
+            {"role": "system", "content": package.planner_prompt()},
+            {"role": "user", "content": package.planner_request(project, request)},
+        ])
+    except LLMTransportError:
+        return ""
+    return strip_think(result.content, think_re)
+
+
 def _critic_pass(backend, registry, ctx, system, user, label, log, max_turns,
                  require_evidence, no_evidence_msg, think_re=THINK_RE) -> tuple[bool, str]:
     """One independent reviewing pass: fresh context, a skeptical prompt, the
@@ -547,15 +632,45 @@ def _critic_pass(backend, registry, ctx, system, user, label, log, max_turns,
 
 
 def _verify(backend, registry, ctx, request, files, log, max_turns,
-            think_re=THINK_RE) -> tuple[bool, str]:
-    """The doer doesn't grade its own homework: an independent pass re-runs the
-    code in the real sandbox and returns (passed, report)."""
+            build=False, think_re=THINK_RE) -> tuple[bool, str]:
+    """The doer doesn't grade its own homework. In build mode this is the
+    ANTITHESIS (diff the solution against the twin, anti-collusion evidence
+    required); otherwise the plain verifier (re-run the code, text PASS ok)."""
+    if build:
+        return _critic_pass(
+            backend, registry, ctx,
+            package.antithesis_prompt(),
+            package.antithesis_request(ctx.project, request, files),
+            "antithesis", log, max_turns, require_evidence=True,
+            no_evidence_msg=(
+                "VERDICT PASS rejected — the antithesis never ran the solution or "
+                "the twin, so it has no evidence the outputs actually match. "
+                "Treating as FAIL."),
+            think_re=think_re,
+        )
     return _critic_pass(
         backend, registry, ctx,
         package.verifier_prompt(),
         package.verifier_request(request, files),
         "verifier", log, max_turns, require_evidence=False,
         no_evidence_msg="", think_re=think_re,
+    )
+
+
+def _referee(backend, registry, ctx, request, files, antithesis_report, log,
+             max_turns, think_re=THINK_RE) -> tuple[bool, str]:
+    """The tie-breaker, invoked only on deadlock (verify rounds spent, antithesis
+    still failing). Fresh eyes, the real sandbox, and the authority to overrule
+    either side — but a PASS needs real executed evidence or the antithesis stands."""
+    return _critic_pass(
+        backend, registry, ctx,
+        package.referee_prompt(),
+        package.referee_request(request, files, antithesis_report),
+        "referee", log, max_turns, require_evidence=True,
+        no_evidence_msg=(
+            "VERDICT PASS rejected — the referee ran nothing, so it has no "
+            "evidence to overturn the antithesis. The antithesis stands; FAIL."),
+        think_re=think_re,
     )
 
 

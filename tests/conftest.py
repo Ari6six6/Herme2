@@ -1,9 +1,29 @@
+import threading
+from contextlib import contextmanager
 from pathlib import Path
 
 import pytest
 
 from hermes.config import Config
 from hermes.project import Project
+
+
+@contextmanager
+def serve_reference_twin(model_dir, port):
+    """Run the diff-only reference responder over a twin's recorded samples on a
+    fixed port, so build-mode agent-loop tests (doer/antithesis/referee) can hit a
+    live twin at the tunneled twin_local_port. Mirrors the real `build serve` from
+    the agent's point of view; the production twin is a container on the VPS."""
+    from hermes.twin import server as twin_server
+
+    srv = twin_server.make_server(str(model_dir), port=port)
+    t = threading.Thread(target=srv.serve_forever, daemon=True)
+    t.start()
+    try:
+        yield
+    finally:
+        srv.shutdown()
+        t.join(timeout=2)
 
 
 @pytest.fixture

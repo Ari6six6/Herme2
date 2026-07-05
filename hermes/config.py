@@ -26,9 +26,15 @@ DEFAULTS: dict = {
     "max_turns": 40,
     "stall_nudges": 2,  # bounce prose-only turns back N times before accepting them as final
     "phantom_nudges": 1,  # bounce a finish that pasted code but wrote/ran nothing
+    "build_proof_nudges": 1,  # in build mode, bounce a finish that never checked the twin
     "verify_code_runs": True,  # after a code task, an independent pass re-runs it in the sandbox
     "verify_rounds": 2,  # how many times that pass may bounce a failed run back
-    "verify_max_turns": 6,  # tool-call budget inside one verification pass
+    "verify_max_turns": 6,  # tool-call budget inside one verification/referee pass
+    "plan_build_tasks": True,  # build mode: a planner lays out a checklist before building
+    "referee_on_deadlock": True,  # build mode: a referee breaks a builder/antithesis deadlock
+    "build_live_touch": False,  # sealed build mode: False cuts off ALL live-target reach (no web
+                                 # tools, no twin_expand/twin_reground) so `run` can only ever hit
+                                 # the twin; set True to re-allow those narrowly-scoped live reads
     "max_tool_result_chars": 8000,
     "package_budget_tokens": 10000,  # scaled down automatically on small contexts
     "history_max_prompts": 30,
@@ -67,7 +73,13 @@ DEFAULTS: dict = {
     # before a task is reported done. Adds a header rule + a one-shot harness
     # nudge when a file-mutating run finishes without running anything.
     "verify_before_done": False,
-    "allow_gpu_network": False,  # False: box may install/build (net), but raw egress goes via the phone; True: unrestricted box net
+    "allow_gpu_network": False,  # False: box may install/build (net), but raw egress + target traffic go via the phone; True: unrestricted box net
+    "twin_clone_max": 200,  # max requests recording a target's responses makes
+    "twin_clone_delay": 0.5,  # polite seconds between reads while recording
+    "twin_clone_depth": 0,  # 0 = fingerprint only (no page crawl); >0 follows links
+    "twin_port": 8900,  # localhost port the runtime twin container publishes on
+    "twin_base_image": "ubuntu:22.04",  # base image the container twin boots from before the recipe
+    "twin_serve_step_timeout": 1800,  # per-recipe-step timeout when respinning from the blueprint
     "max_model_len": 0,  # 0 = pick automatically from detected VRAM
     "gpu_port": 8000,
     "local_port": 8000,

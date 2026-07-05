@@ -24,11 +24,14 @@ def test_restore_unknown_id_returns_false(project):
     assert not checkpoint.restore(project, "nope")
 
 
-def test_excludes_runs(project):
+def test_excludes_runs_and_twin(project):
     project.new_run()  # creates runs/0001
+    project.twin_dir.mkdir(exist_ok=True)
+    (project.twin_dir / "big.bin").write_text("x" * 1000)
     cid = checkpoint.create(project)
     snap = project.root / checkpoint.CHECKPOINT_DIRNAME / cid
     assert not (snap / "runs").exists()
+    assert not (snap / "twin").exists()
     assert (snap / "workspace").exists()
 
 

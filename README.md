@@ -103,6 +103,36 @@ turn.
 
 ---
 
+## Build mode & the sandbox twin
+
+Point Hermes at a web service and it stands up a **runnable local clone** — the
+twin — then builds a solution against the twin instead of the live system, with
+correctness measured against what the real service actually does. The twin is the
+*reconstructed real software* (for a known open-source stack), running in a
+container on the VPS; recorded request/response pairs are the ground truth. Once
+the twin is **sealed** the agent has no path to the live target at all.
+
+```
+sandbox provision                          # container runtime on the VPS (once)
+project build shop https://shop.example.com   # record the target, seed an OPEN twin
+mission edit                               # the task
+run build                                  # reconstruct: stand the real stack up, seal
+build serve                                # boot the twin in a local container
+run build the /products page to meet the mission   # build against the sealed twin
+```
+
+In build mode two more roles bracket the doer, same weights wearing different
+hats: a **planner** lays out the checklist first, and on a builder/antithesis
+deadlock a **referee** makes the binding call — but only on real executed evidence.
+
+Herme builds against what it records. **Deeper reconnaissance of a target** (its
+listening services, wider footprint, exposed files) is a *separate* program,
+[`herme-recon`](https://github.com/Ari6six6/Hermes/tree/herme-recon), which you
+invoke on demand through the recon skill — it's deliberately not baked into the
+core.
+
+---
+
 ## Models
 
 `gpu serve` opens a picker — the mind behind Hermes is your choice, and it persists
@@ -243,6 +273,7 @@ tools only appear once you've registered a server.
   workspace/          the agent's file area
   skills/             per-project skills
   tools/              forged tools + approval manifest
+  twin/               the runtime-twin blueprint (build projects)
   runs/NNNN/          transcript.jsonl · summary.md · final.md per run
   .checkpoints/       project snapshots (checkpointing on by default)
 ```
@@ -251,6 +282,7 @@ tools only appear once you've registered a server.
 
 - **[docs/GETTING_STARTED.md](docs/GETTING_STARTED.md)** — A-to-Z: fresh VPS to first run.
 - **[docs/USAGE.md](docs/USAGE.md)** — every config flag, token costs, recommended 60K settings, new commands.
+- **[docs/runbook.md](docs/runbook.md)** — the tight build-a-twin runbook.
 - **[docs/ARCHITECTURE_NOTES.md](docs/ARCHITECTURE_NOTES.md)** — how the package is assembled + measured token budget.
 - **[docs/DECISIONS.md](docs/DECISIONS.md)** — why the newer features are built the way they are.
 

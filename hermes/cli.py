@@ -82,7 +82,7 @@ def _gpu_status_line(cfg, state) -> str:
 def _sandbox_status_line() -> str:
     caps = sandbox_capabilities(local_endpoint())
     if not caps["runtime"]:
-        return "local — no container runtime yet (`sandbox provision` installs one)"
+        return "local — no container runtime yet (installs on first `build serve`)"
     bits = [caps["runtime"]] + (["kvm"] if caps["kvm"] else [])
     return "local (" + ", ".join(bits) + ")"
 
@@ -144,7 +144,7 @@ def cmd_run(cfg, args: str) -> None:
         return
     state = load_gpu_state()
     gpu = endpoint_from_state(state)
-    sandbox = local_endpoint()  # this box (the VPS Hermes runs on)
+    sandbox = local_endpoint()  # the twin runs in a container on this same box
     if cfg.get("backend") != "mock":
         if state.get("host"):
             _ensure_tunnel(cfg, state)
@@ -161,8 +161,28 @@ def cmd_run(cfg, args: str) -> None:
         "context_window": state.get("served_ctx", 0),
         "model_identity": spec.identity,
         "model_tool_guidance": spec.tool_guidance,
+        "twin_port": cfg.get("twin_port", 8900),
+        "build_live_touch": cfg.get("build_live_touch", False),
     }
     prompt = args.strip()
+    # `run build` is the refinement loop: reopen the twin and run a recon/build
+    # pass that diffs the reconstruction against the live target and closes the
+    # gap. Each invocation is another pass.
+    if prompt.lower() == "build":
+        twin = project.twin()
+        if not twin.exists():
+            print(yellow("not a build project") + dim(" — `project build <name> <url>` first"))
+            return
+        if twin.is_sealed():
+            twin.unseal()
+            print(dim("reopened the twin for a refinement pass."))
+        prompt = (
+            "Refinement pass. Use twin_diff to compare the live target against the "
+            "twin as it stands, then close every divergence — reconstruct/build what "
+            "the target really runs, and record/correct samples — until twin_diff "
+            "reports all-match. Then twin_seal."
+        )
+
     backend = make_backend(cfg)
     agent.run(project, prompt, cfg, backend, gpu=gpu, env=env, sandbox=sandbox)
 
@@ -180,6 +200,32 @@ def cmd_project(cfg, args: str) -> None:
         cfg.set("current_project", parts[1])
         cfg.save()
         print(green(f"project '{parts[1]}' created and selected.") + dim(" Edit its mission: `mission edit`"))
+    elif sub == "build" and len(parts) >= 3:
+        name, url = parts[1], parts[2]
+        if not url.startswith(("http://", "https://")):
+            print(red("usage: project build <name> <http(s)-url>"))
+            return
+        try:
+            project = Project.create(pdir, name)
+        except ProjectError as e:
+            print(red(e))
+            return
+        cfg.set("current_project", name)
+        cfg.save()
+        twin = project.twin()
+        twin.init(source=url, mode="url")
+        # The builder needs to move files phone<->box and pull FOSS on the phone;
+        # equip those up front so it isn't stuck fumbling for them.
+        for t in ("download_file", "transfer"):
+            project.equip_tool(t)
+        report = _clone_target(cfg, twin, url, seal=False)
+        print(green(f"build project '{name}' created — "
+                    f"{report.get('exchanges', 0)} response(s) recorded, "
+                    f"stack fingerprinted (open)."))
+        print(dim("Set the task with `mission edit`, then `run build` — the agent "
+                  "stands up a runtime clone of the real webserver from these "
+                  "recordings (each `run build` is another reconstruction pass). "
+                  "For deeper target recon, use the herme-recon skill."))
     elif sub == "use" and len(parts) > 1:
         try:
             Project.load(pdir, parts[1])
@@ -402,9 +448,9 @@ def cmd_gpu(cfg, args: str) -> None:
 
 
 def cmd_sandbox(cfg, args: str) -> None:
-    """The local sandbox: this box (the VPS Hermes runs on). Nothing to register —
-    `status` shows what it can isolate with, `provision` installs the container
-    runtime."""
+    """The local sandbox: this box (the VPS Hermes runs on) is where the twin
+    container lives. Nothing to register — `status` shows what it can isolate
+    with, `provision` installs the container runtime."""
     parts = args.split(maxsplit=1)
     sub = parts[0] if parts else "status"
     ep = local_endpoint()
@@ -413,7 +459,7 @@ def cmd_sandbox(cfg, args: str) -> None:
         caps = sandbox_capabilities(ep)
         print("container runtime: " + (
             cyan(caps["runtime"]) if caps["runtime"]
-            else yellow("none yet — `sandbox provision`")
+            else yellow("none yet — `sandbox provision` (or it installs on first `build serve`)")
         ))
         print("kvm (microVM-capable): " + (
             green("yes") if caps["kvm"]
@@ -477,6 +523,141 @@ def cmd_host(cfg, args: str) -> None:
             print(f"  {cyan(name)}  {rec.get('user', 'root')}@{rec['host']}:{rec.get('port', 22)}{note}")
     else:
         print(dim("usage: host add <name> <ssh-string> [note] | list | rm <name>"))
+
+
+def _clone_target(cfg, twin, url: str, seal: bool = False) -> dict:
+    """Record a target's responses into a twin blueprint, with live progress.
+    This is not a page mirror — we do a light read of the root and well-known
+    endpoints to identify the web stack and capture ground-truth responses, then
+    the builder reconstructs the real software from that. seal=False leaves it
+    open for the builder to reconstruct and seal.
+
+    Deeper reconnaissance of the target is deliberately NOT here — that lives in
+    the separate `herme-recon` program, run on demand via the recon skill. Herme2
+    only records the responses of what it's pointed at."""
+    from hermes.twin import clone as clone_mod
+    colors = {"exchange": green, "spec": cyan, "error": red, "done": cyan, "stack": cyan}
+
+    def on_event(kind, text):
+        print(colors.get(kind, dim)(f"  {text}"))
+
+    # Web-stack fingerprint: a light read of the root (+ discovery/well-known
+    # endpoints) to identify the app/framework/server — no crawl of the site's
+    # pages. max_depth=0 means we never follow links into the page graph.
+    print(dim(f"fingerprinting the web stack at {url} (read-only)..."))
+    report = clone_mod.clone(
+        twin, url,
+        fetch=clone_mod._httpx_fetch,
+        max_exchanges=cfg.get("twin_clone_max", 200),
+        delay=cfg.get("twin_clone_delay", 0.5),
+        max_depth=cfg.get("twin_clone_depth", 0),
+        seal=seal,
+        on_event=on_event,
+    )
+    return report
+
+
+def cmd_build(cfg, args: str) -> None:
+    """The runtime twin: clone a target into a faithful, safe local copy the
+    agent builds against — never the live service."""
+    project = _current_project(cfg)
+    if project is None:
+        print(yellow("no current project") + dim(" — `project build <name> <url>` to start one"))
+        return
+    parts = args.split(maxsplit=1)
+    sub = parts[0] if parts else "show"
+    rest = parts[1].strip() if len(parts) > 1 else ""
+    twin = project.twin()
+
+    if sub == "win":
+        if not twin.exists():
+            print(yellow("no target yet — `project build <name> <url>` first"))
+            return
+        if not rest:
+            print(twin.win_condition or dim("(no winning condition set)"))
+            return
+        twin.set_win_condition(rest)
+        print(green("winning condition recorded."))
+
+    elif sub == "clone":  # re-seed (e.g. after changing depth/cap), leaves it open
+        if not twin.exists():
+            print(yellow("no target yet — `project build <name> <url>` first"))
+            return
+        mission, win = twin.mission, twin.win_condition
+        twin.init(source=twin.source, mode="url", mission=mission, win_condition=win)
+        report = _clone_target(cfg, twin, twin.source, seal=False)
+        print(green(f"twin re-seeded (open) — {report['exchanges']} sample(s)."))
+
+    elif sub == "seal":  # freeze a seeded twin without the agent (quick path)
+        if not twin.exists():
+            print(yellow("no target yet — `project build <name> <url>` first"))
+            return
+        if twin.is_sealed():
+            print(dim("already sealed."))
+        elif not twin.exchanges():
+            print(red("nothing to seal — twin has no samples."))
+        else:
+            twin.seal()
+            print(green(f"twin sealed — {len(twin.exchanges())} sample(s). Build phase open."))
+
+    elif sub == "serve":  # run the twin in a local container for the solution to hit
+        if not twin.is_sealed():
+            print(yellow("twin isn't sealed yet — seal it first "
+                         "(the agent's twin_seal, or `build seal`)."))
+            return
+        from hermes.twin import deploy as twin_deploy
+        ep = local_endpoint()  # the twin is a container on this same box
+        port = cfg.get("twin_port", 8900)
+        clean = rest.strip() == "clean"
+        note = " (clean respin)" if clean else ""
+        print(dim(f"spinning the twin up in a local container{note} ..."))
+        report = twin_deploy.deploy(
+            ep, twin, port, clean=clean,
+            base_image=cfg.get("twin_base_image", twin_deploy.DEFAULT_BASE_IMAGE),
+            step_timeout=cfg.get("twin_serve_step_timeout", 1800),
+            on_event=lambda t: print(dim("  " + t)),
+        )
+        if report["ok"]:
+            print(green(f"twin live: container {report.get('container')}")
+                  + dim(f"  — reachable at http://127.0.0.1:{port}"))
+        else:
+            print(red(f"twin failed to start: {report.get('error')}"))
+            if report.get("log_path"):
+                print(dim(f"  serve log: {report['log_path']}  (or `build logs`)"))
+
+    elif sub == "logs":  # the last build-serve transcript, for debugging a respin
+        from hermes.twin import deploy as twin_deploy
+        path = twin_deploy.serve_log_path(twin)
+        if path.exists():
+            print(path.read_text().rstrip())
+        else:
+            print(dim("no serve log yet — run `build serve` first."))
+
+    elif sub == "blueprint":  # show the portable blueprint that respins the twin
+        if not twin.exists():
+            print(yellow("no target yet — `project build <name> <url>` first"))
+            return
+        recipe = twin.recipe()
+        print(bold(f"blueprint for '{project.name}'") + dim(f"  ({project.twin_dir})"))
+        print(twin.summary())
+        if recipe:
+            print(cyan(f"\nrecipe ({len(recipe)} step(s)) — `build serve` replays this "
+                       "on any box to respin the runtime server:"))
+            for i, s in enumerate(recipe, 1):
+                note = dim(f"   # {s['note']}") if s.get("note") else ""
+                print(f"  {i}. {s['cmd']}{note}")
+        else:
+            print(dim("\n(no recipe yet — reconstruct the stack with `run build`; "
+                      "build_run captures each working step into the blueprint)"))
+
+    elif sub == "clear":
+        import shutil
+        if project.twin_dir.exists():
+            shutil.rmtree(project.twin_dir)
+        print(green("twin cleared."))
+
+    else:  # show
+        print(twin.summary())
 
 
 def cmd_directives(cfg, args: str) -> None:
@@ -706,7 +887,9 @@ HELP = f"""\
 {cyan('tools')}                 list the agent's tools
 {cyan('gpu')} attach [sshstr] | serve | status | tunnel | down   {dim('(alias: g)')}
 {cyan('host')} add <name> <sshstr> [note] | list | rm <name>     your real servers
-{cyan('sandbox')} status | provision                            the local box Hermes runs on
+{cyan('sandbox')} status | provision                            the local box where the twin container runs
+{cyan('project')} build <name> <url>   reconstruct a target into a twin to work against
+{cyan('build')} win <text> | clone | seal | serve [clean] | blueprint | logs | show | clear   the twin for this project
 {cyan('persona')} edit          edit the persona appended to the system prompt
 {cyan('debug')} prefix          measure the prefix-cache-shared bytes across two packages
 {cyan('config')} [key [value]]  view/set configuration
@@ -735,6 +918,8 @@ def dispatch(cfg, line: str) -> bool:
         cmd_host(cfg, rest)
     elif cmd == "sandbox":
         cmd_sandbox(cfg, rest)
+    elif cmd == "build":
+        cmd_build(cfg, rest)
     elif cmd == "config":
         cmd_config(cfg, rest)
     elif cmd == "directives":

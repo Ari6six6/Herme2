@@ -6,7 +6,8 @@ repos), a phone has no guarantee of a working git, and copy/restore has no
 failure modes to reason about — it stays boring and reliable, which is the whole
 point of a safety net. We snapshot the project's own state (mission, notes,
 directives, history, workspace, tools, skills) and skip the bulky, separately
-managed `runs/` (transcripts) dir and the checkpoint store itself.
+managed dirs: `runs/` (transcripts), `twin/` (the build blueprint), and the
+checkpoint store itself.
 
 On by default. Each snapshot is taken *before* the first file-mutating tool call
 of a turn, so restoring one rewinds to just before that turn's changes.
@@ -20,7 +21,7 @@ import time
 from pathlib import Path
 
 CHECKPOINT_DIRNAME = ".checkpoints"
-EXCLUDE = {CHECKPOINT_DIRNAME, "runs"}
+EXCLUDE = {CHECKPOINT_DIRNAME, "runs", "twin"}
 
 
 def _store(project) -> Path:

@@ -68,6 +68,15 @@ class Project:
         return self.root / "runs"
 
     @property
+    def twin_dir(self) -> Path:
+        return self.root / "twin"
+
+    def twin(self):
+        """The runtime-twin model of this project's target (may be unsealed)."""
+        from hermes.twin.model import TwinModel
+        return TwinModel(self.twin_dir)
+
+    @property
     def equipped_path(self) -> Path:
         return self.tools_dir / ".equipped.json"
 
