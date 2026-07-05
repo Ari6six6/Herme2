@@ -217,7 +217,10 @@ def build_registry(project, cfg, confirm_fn) -> ToolRegistry:
     # `config set gpu_shell true` when a task genuinely needs to compute on the
     # card. Even then it stays network-isolated unless `allow_gpu_network` is
     # also set (that flag governs the box's egress, not whether the shell exists).
-    if cfg.get("gpu_shell", False):
+    # A BUILD project never gets it regardless: its sandbox is the VPS twin
+    # container (build_run / the twin tools), so the box stays model-only —
+    # there is no bare-metal-on-the-box reconstruction fallback to take.
+    if cfg.get("gpu_shell", False) and not twin_model.exists():
         for t in remote.TOOLS:
             registry.register(t)
     if live_touch:
