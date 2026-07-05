@@ -34,15 +34,21 @@ run build
 ```
 
 One refinement pass: the agent reopens the twin, uses `twin_diff` to compare the
-live target against the twin, reconstructs the real stack in the box (installs are
-allowed; steps it gets working are captured into a replayable recipe), records
-ground-truth samples, and seals when it's satisfied. **Run it again for another
-pass** — each one tightens the match. Watch for:
+live target against the twin, reconstructs the real stack via `build_run` in the
+twin's own build container (installs are allowed there — it has network; steps
+it gets working are captured into a replayable recipe), records ground-truth
+samples, and seals when it's satisfied. **Run it again for another pass** — each
+one tightens the match. Watch for:
 
-- `[gpu] $ apt-get install …` — installs now run on the box (expected).
+- `build_run` output — installs/clones (apt, pip, npm, git clone) run in the
+  twin's build container (expected; it's the one container with network).
 - `Keep this one on the phone …` — a raw `curl`/`wget` was bounced; that's by
   design, the agent should pull it on the phone and `transfer` it.
 - `twin_diff: N match, M drifted, K missing` — the score; goal is all-match.
+
+Once sealed, `sandbox_shell` is the only execution tool left and it's
+`--network none` — nothing needing a download can happen after this point.
+Anything the solution will need at runtime has to already be in the recipe.
 
 Inspect anytime: `build show` (state, samples, stack), `build recipe` is shown to
 the agent via `build_recipe`.

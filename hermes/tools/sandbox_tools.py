@@ -9,6 +9,8 @@ The project workspace is bind-mounted, so files written with `write_file`
 
 from __future__ import annotations
 
+import re
+
 from hermes.tools.base import obj_schema, tool
 from hermes.ui import dim
 
@@ -18,6 +20,31 @@ def _need_sandbox(ctx):
         return "ERROR: no sandbox host available. Hermes runs on the VPS; the "\
                "sandbox is this box. Check `sandbox status`."
     return None
+
+
+# Signatures a failed command leaves behind when it tried to reach the network
+# from inside the `--network none` container — there is no route out, ever, so
+# these aren't transient/slow, they're permanent for this container. Naming
+# them explicitly stops the model from reading a doomed retry as "flaky" and
+# burning turns on it.
+_NETWORK_FAILURE_RE = re.compile(
+    r"Temporary failure in name resolution"
+    r"|Network is unreachable"
+    r"|Could not resolve host"
+    r"|Connection refused"
+    r"|No route to host"
+    r"|Failed to connect to"
+    r"|Could not connect to",
+    re.I,
+)
+_NETWORK_HINT = (
+    "\n\nNOTE: that failure pattern means the command tried to reach the "
+    "network. This container is `--network none` — no route out exists, ever; "
+    "this will not succeed on retry and it is not slow, it never connects. "
+    "Anything needing installs/downloads has to happen in the twin build "
+    "container (`build_run`) before the twin is sealed — it's too late for that "
+    "here."
+)
 
 
 @tool(
@@ -55,7 +82,10 @@ def sandbox_shell(args, ctx):
         ctx.sandbox, name, command, runtime, cwd=args.get("cwd", ""), timeout=timeout
     )
     body = (out or "") + (("\n[stderr]\n" + errout) if errout else "")
-    return f"exit code {rc}\n{body.strip() or '(no output)'}"
+    result = f"exit code {rc}\n{body.strip() or '(no output)'}"
+    if rc != 0 and _NETWORK_FAILURE_RE.search(body):
+        result += _NETWORK_HINT
+    return result
 
 
 TOOLS = [sandbox_shell]
