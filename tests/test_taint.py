@@ -178,6 +178,51 @@ def test_approved_domain_does_not_cover_writes_or_other_domains(project, cfg, mo
     assert len(calls) == 2  # a new domain still confirms
 
 
+def test_http_allow_skips_taint_gate_entirely(project, cfg, monkeypatch):
+    """A domain in the operator's persistent http_allow list never prompts
+    under taint, even for a state-changing method or on the very first call
+    of the run (no prior per-run approval needed)."""
+    _patch_fetch(monkeypatch)
+    cfg.set("http_allow", [{"domain": "trusted.example", "methods": ["GET", "POST"]}])
+    reg, ctx = _reg_ctx(project, cfg, lambda *a, **k: True)
+
+    def never(*a, **k):
+        raise AssertionError("an http_allow-listed request must not prompt")
+
+    get_call = ToolCall("i", "http_request",
+                        json.dumps({"url": "https://trusted.example/page"}))
+    agent._dispatch_maybe_tainted(reg, get_call, ctx, never, turn_tainted=True)
+
+    post_call = ToolCall("i", "http_request",
+                         json.dumps({"url": "https://trusted.example/submit",
+                                     "method": "POST", "body": "x"}))
+    agent._dispatch_maybe_tainted(reg, post_call, ctx, never, turn_tainted=True)
+
+
+def test_http_allow_does_not_cover_unlisted_domain_or_method(project, cfg, monkeypatch):
+    _patch_fetch(monkeypatch)
+    cfg.set("http_allow", [{"domain": "trusted.example", "methods": ["GET"]}])
+    reg, ctx = _reg_ctx(project, cfg, lambda *a, **k: True)
+    calls = []
+
+    def confirm(action, detail="", viewable=None):
+        calls.append(action)
+        return True
+
+    # POST not in the rule's methods -> still confirms.
+    post_call = ToolCall("i", "http_request",
+                         json.dumps({"url": "https://trusted.example/submit",
+                                     "method": "POST", "body": "x"}))
+    agent._dispatch_maybe_tainted(reg, post_call, ctx, confirm, turn_tainted=True)
+    assert len(calls) == 1
+
+    # A different domain isn't covered by the rule -> still confirms.
+    other_call = ToolCall("i", "http_request",
+                          json.dumps({"url": "https://other.example/page"}))
+    agent._dispatch_maybe_tainted(reg, other_call, ctx, confirm, turn_tainted=True)
+    assert len(calls) == 2
+
+
 def test_tainting_tool_own_turn_is_not_gated(project, cfg, monkeypatch):
     _patch_fetch(monkeypatch)
     cfg.set("plan_build_tasks", False)

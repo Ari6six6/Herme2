@@ -247,9 +247,28 @@ The tainting tools today are `http_request` and `web_search`. When the
 Docker/browser sandbox lands, its runtime-output tools join the list — same rail,
 no new config.
 
-There is no flag. It's a safety boundary, so it's always active. It only ever
-prompts you when untrusted content is actually in scope; a run that never fetches
-anything never sees it. `finish_run` is exempt (ending a run isn't an action).
+There is no flag to turn the rail itself off. It's a safety boundary, so it's
+always active. It only ever prompts you when untrusted content is actually in
+scope; a run that never fetches anything never sees it. `finish_run` is exempt
+(ending a run isn't an action).
+
+**Two ways an approval avoids re-asking.** A same-run cache: once you approve a
+GET/HEAD to a domain in a tainted turn, further reads of that domain skip the
+prompt for the rest of the *run* (`ctx.approved_domains`), but it resets on the
+next run and never covers POST/PUT/etc. For a domain (and optionally specific
+methods, including state-changing ones) you're willing to trust permanently,
+set it up once with `allow add <domain> [METHOD,...]` (or edit `http_allow` in
+config directly) — it's an explicit, operator-authored exemption, not a
+default, and it's the one thing in this section you do configure: everything
+matching it skips the taint prompt (and the tool's own state-changing-method
+confirm) from then on, in every future run. Unlisted domains/methods still
+always ask.
+
+```
+allow add api.github.com GET,POST   # trust this API's reads and writes
+allow list                          # see what's auto-approved
+allow rm api.github.com             # revoke it
+```
 
 ## Static package budget (measured, 60K box)
 
@@ -303,3 +322,4 @@ what it was before. Nothing here changes on-disk formats without silent migratio
 | `skills [show\|edit <name>]` | list / read / nano the agent's how-to notes |
 | `checkpoint [restore <id>]` | list project snapshots / revert to one |
 | `debug prefix` | measure the byte prefix two consecutive packages share |
+| `allow [list]\|add <domain> [methods]\|rm <domain>` | manage the persistent `http_request` auto-approve list |

@@ -837,6 +837,48 @@ def cmd_config(cfg, args: str) -> None:
         print(json.dumps(redacted, indent=2))
 
 
+def cmd_allow(cfg, args: str) -> None:
+    """Manage the persistent http_allow list (hermes/http_policy.py): domains
+    (and optionally methods) that never prompt for http_request, tainted or
+    not, instead of re-answering the same y/n every run."""
+    parts = args.strip().split(maxsplit=1)
+    sub = parts[0] if parts else "list"
+    rest = parts[1] if len(parts) > 1 else ""
+    rules = list(cfg.get("http_allow") or [])
+    if sub in ("", "list"):
+        if not rules:
+            print(dim("no auto-approved domains — `allow add <domain> [METHOD,...]`"))
+            return
+        for r in rules:
+            methods = ",".join(r.get("methods") or ["GET", "HEAD"])
+            print(f"  {cyan(r.get('domain', '?'))}  {dim(methods)}")
+    elif sub == "add":
+        bits = rest.split()
+        if not bits:
+            print(red("usage: allow add <domain> [METHOD,METHOD,...]"))
+            return
+        domain = bits[0].lower()
+        methods = ([m.strip().upper() for m in bits[1].split(",")]
+                   if len(bits) > 1 else ["GET", "HEAD"])
+        rules = [r for r in rules if r.get("domain") != domain]
+        rules.append({"domain": domain, "methods": methods})
+        cfg.set("http_allow", rules)
+        cfg.save()
+        print(f"auto-approved {cyan(domain)} for {dim(','.join(methods))}")
+    elif sub in ("rm", "remove"):
+        domain = rest.strip().lower()
+        kept = [r for r in rules if r.get("domain") != domain]
+        if len(kept) == len(rules):
+            print(yellow(f"no rule for {domain}"))
+            return
+        cfg.set("http_allow", kept)
+        cfg.save()
+        print(f"removed {domain}")
+    else:
+        print(red(f"unknown: allow {sub}")
+              + dim(" (try: allow / allow add <domain> [methods] / allow rm <domain>)"))
+
+
 def cmd_info(cfg, what: str, args: str) -> None:
     project = _current_project(cfg)
     if project is None:
@@ -893,6 +935,7 @@ HELP = f"""\
 {cyan('persona')} edit          edit the persona appended to the system prompt
 {cyan('debug')} prefix          measure the prefix-cache-shared bytes across two packages
 {cyan('config')} [key [value]]  view/set configuration
+{cyan('allow')} [list] | add <domain> [methods] | rm <domain>   persistent http_request auto-approve
 {cyan('quit')}                  exit
 """
 
@@ -922,6 +965,8 @@ def dispatch(cfg, line: str) -> bool:
         cmd_build(cfg, rest)
     elif cmd == "config":
         cmd_config(cfg, rest)
+    elif cmd == "allow":
+        cmd_allow(cfg, rest)
     elif cmd == "directives":
         cmd_directives(cfg, rest)
     elif cmd == "skills":

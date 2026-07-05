@@ -12,6 +12,7 @@ from urllib.parse import urlparse
 from hermes import checkpoint
 from hermes import compaction
 from hermes import hosts as hosts_mod
+from hermes import http_policy
 from hermes import package
 from hermes.llm import ChatResult, LLMTransportError
 from hermes.tools import build_registry
@@ -491,6 +492,24 @@ def _readable_domain(tc) -> str | None:
     return urlparse(url).netloc.lower() or None
 
 
+def _policy_allows(cfg, tc) -> bool:
+    """True if tc is an http_request whose (domain, method) matches an
+    operator-configured http_allow rule (hermes/http_policy.py) — the
+    persistent, config-driven auto-approve the owner sets up once instead of
+    re-answering the same y/n every run."""
+    if tc.name != "http_request":
+        return False
+    try:
+        args = json.loads(tc.arguments or "{}")
+    except (json.JSONDecodeError, AttributeError):
+        return False
+    url = args.get("url")
+    if not isinstance(url, str):
+        return False
+    method = str(args.get("method") or "GET").upper()
+    return http_policy.is_allowed(cfg, urlparse(url).netloc.lower(), method)
+
+
 def _dispatch_maybe_tainted(registry, tc, ctx, confirm_fn, turn_tainted: bool) -> str:
     """Dispatch one tool call. In a tainted turn (untrusted network content is in
     the immediate inputs), every action requires owner approval regardless of its
@@ -498,11 +517,16 @@ def _dispatch_maybe_tainted(registry, tc, ctx, confirm_fn, turn_tainted: bool) -
     effect, so it's exempt. On approval we dispatch with confirm pre-satisfied so
     a self-gating tool doesn't prompt twice for the same action.
 
-    Exception: a GET/HEAD http_request to a domain the owner already approved
-    this run skips the prompt entirely — an authorized domain stays read-free for
-    the rest of the run instead of re-asking on every turn it happens to follow a
-    fetch. New domains and any state-changing request still always confirm."""
+    Exceptions: an http_request matching the operator's persistent http_allow
+    list (any method, set up once via `allow`/`config set http_allow`) skips
+    the prompt outright. Short of that, a GET/HEAD to a domain the owner
+    already approved this run also skips it — an authorized domain stays
+    read-free for the rest of the run instead of re-asking on every turn it
+    happens to follow a fetch. New domains and any state-changing request
+    still always confirm."""
     if not turn_tainted or tc.name == "finish_run":
+        return registry.dispatch(tc.name, tc.arguments, ctx)
+    if _policy_allows(ctx.cfg, tc):
         return registry.dispatch(tc.name, tc.arguments, ctx)
     domain = _readable_domain(tc)
     if domain and domain in ctx.approved_domains:
