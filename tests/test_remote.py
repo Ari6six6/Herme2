@@ -1,11 +1,22 @@
-"""remote_shell hardening: cwd quoting and kernel-level network isolation."""
+"""remote_shell hardening: cwd quoting and kernel-level network isolation.
+
+The GPU shell is opt-in now (the GPU box is the model's host, not a workshop);
+this whole file exercises it, so it runs with gpu_shell on. Network isolation
+(allow_gpu_network) is left at its default so the isolation paths are tested.
+"""
 
 import json
 
+import pytest
 from conftest import FakeEndpoint
 
 from hermes.tools import build_registry
 from hermes.tools.base import ToolContext
+
+
+@pytest.fixture(autouse=True)
+def _gpu_shell_on(cfg):
+    cfg.set("gpu_shell", True)
 
 
 def _dispatch(project, cfg, gpu, args):

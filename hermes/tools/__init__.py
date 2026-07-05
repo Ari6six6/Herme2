@@ -208,8 +208,17 @@ def build_registry(project, cfg, confirm_fn) -> ToolRegistry:
     sealed = twin_model.is_sealed()
     live_touch = (not sealed) or cfg.get("build_live_touch", False)
 
-    for module in (local_fs, local_shell, remote, sandbox_tools, meta):
+    for module in (local_fs, local_shell, sandbox_tools, meta):
         for t in module.TOOLS:
+            registry.register(t)
+    # The GPU box is the model's host, not a shell the agent runs code from:
+    # code runs in the air-gapped sandbox container (sandbox_shell). The GPU
+    # shell (remote_*) is off by default — the operator opens it with
+    # `config set gpu_shell true` when a task genuinely needs to compute on the
+    # card. Even then it stays network-isolated unless `allow_gpu_network` is
+    # also set (that flag governs the box's egress, not whether the shell exists).
+    if cfg.get("gpu_shell", False):
+        for t in remote.TOOLS:
             registry.register(t)
     if live_touch:
         for t in web.TOOLS:

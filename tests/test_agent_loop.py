@@ -232,6 +232,7 @@ def test_denied_local_shell_feeds_back(project, cfg):
 
 
 def test_remote_tools_without_gpu(project, cfg):
+    cfg.set("gpu_shell", True)  # opt the GPU shell in, then attach no box
     script = [
         {"tool": "remote_shell", "args": {"command": "ls"}},
         {"tool": "finish_run", "args": {"summary": "no gpu"}},

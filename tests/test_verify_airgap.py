@@ -60,6 +60,7 @@ def test_verifier_cannot_reach_the_gpu_and_uses_the_sandbox(project, cfg):
 def test_gpu_tools_are_stripped_from_the_verify_registry(project, cfg):
     from hermes.tools import build_registry
 
+    cfg.set("gpu_shell", True)  # give the doer the GPU shell to strip
     reg = build_registry(project, cfg, lambda *a, **k: True)
     names_full = set(reg.names())
     names_verify = set(reg.without(agent.GPU_TOOLS).names())

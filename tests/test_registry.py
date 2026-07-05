@@ -31,9 +31,12 @@ def test_schemas_shape(project, cfg, yes):
     schemas = registry.schemas()
     assert all(s["type"] == "function" for s in schemas)
     names = registry.names()
-    for expected in ("read_file", "write_file", "local_shell", "remote_shell",
+    # sandbox_shell (air-gapped exec) is a default builtin; the GPU shell
+    # (remote_shell) is opt-in via allow_gpu_network, so it's not here by default.
+    for expected in ("read_file", "write_file", "local_shell", "sandbox_shell",
                      "http_request", "web_search", "finish_run", "forge_tool"):
         assert expected in names
+    assert "remote_shell" not in names
 
 
 def test_dispatch_unknown_and_bad_json(project, cfg, yes):
