@@ -95,7 +95,7 @@ export DEBIAN_FRONTEND=noninteractive
 say "Detecting WAN interface"
 
 read -r WAN_IF WAN_SRC < <(ip -o route get 1.1.1.1 2>/dev/null \
-  | sed -n 's/.* dev \([^ ]*\) .* src \([^ ]*\).*/\1 \2/p') || true
+  | sed -n 's/.* dev \([^ ]*\).* src \([^ ]*\).*/\1 \2/p') || true
 WAN_GW="$(ip -o route show default 2>/dev/null | awk '/default/{print $3; exit}')"
 
 [[ -n "${WAN_IF:-}" ]] || die "could not detect WAN interface (no default route?)"
