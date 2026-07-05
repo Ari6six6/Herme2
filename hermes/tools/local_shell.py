@@ -12,12 +12,14 @@ from hermes.tools.base import obj_schema, tool
     "Run a shell command on the operator's phone (Termux). The operator sees "
     "the exact command and must approve it. Use for: running scripts you "
     "wrote for the phone, installing Termux packages, anything local. "
-    "Default cwd is the project workspace.",
+    "Runs at the project root by default, so paths match the file tools: a "
+    "file you wrote as `workspace/x.py` is run with `python workspace/x.py` "
+    "(no `cd workspace` first). Pass `cwd` to start somewhere else.",
     obj_schema(
         {
             "command": {"type": "string", "description": "exact shell command"},
             "timeout": {"type": "integer", "description": "seconds, default 60"},
-            "cwd": {"type": "string", "description": "working dir relative to project root (optional)"},
+            "cwd": {"type": "string", "description": "working dir relative to project root (optional; default: project root)"},
         },
         ["command"],
     ),
@@ -25,7 +27,7 @@ from hermes.tools.base import obj_schema, tool
 def local_shell(args, ctx):
     command = args["command"]
     timeout = min(int(args.get("timeout", 60)), 600)
-    cwd = ctx.project.workspace_dir
+    cwd = ctx.project.root
     if args.get("cwd"):
         from hermes.paths import PathDenied, resolve_in
 
