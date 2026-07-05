@@ -133,6 +133,51 @@ def test_taint_clears_when_no_new_untrusted_input(project, cfg, monkeypatch):
     assert (project.workspace_dir / "b.txt").exists()
 
 
+def test_approved_domain_read_skips_reprompt(project, cfg, monkeypatch):
+    """Once the owner approves a GET to a domain in a tainted turn, a later
+    tainted turn reading the same domain again doesn't re-prompt."""
+    _patch_fetch(monkeypatch)
+    reg, ctx = _reg_ctx(project, cfg, lambda *a, **k: True)
+    calls = []
+
+    def confirm(action, detail="", viewable=None):
+        calls.append(action)
+        return True
+
+    get_call = ToolCall("i", "http_request",
+                        json.dumps({"url": "https://trusted.example/page1"}))
+    out1 = agent._dispatch_maybe_tainted(reg, get_call, ctx, confirm, turn_tainted=True)
+    assert "trusted.example" in ctx.approved_domains
+    assert len(calls) == 1
+
+    get_call2 = ToolCall("i", "http_request",
+                         json.dumps({"url": "https://trusted.example/page2"}))
+    out2 = agent._dispatch_maybe_tainted(reg, get_call2, ctx, confirm, turn_tainted=True)
+    assert len(calls) == 1  # no second prompt for the same domain
+
+
+def test_approved_domain_does_not_cover_writes_or_other_domains(project, cfg, monkeypatch):
+    _patch_fetch(monkeypatch)
+    reg, ctx = _reg_ctx(project, cfg, lambda *a, **k: True)
+    ctx.approved_domains.add("trusted.example")
+    calls = []
+
+    def confirm(action, detail="", viewable=None):
+        calls.append(action)
+        return True
+
+    post_call = ToolCall("i", "http_request",
+                         json.dumps({"url": "https://trusted.example/submit",
+                                     "method": "POST", "body": "x"}))
+    agent._dispatch_maybe_tainted(reg, post_call, ctx, confirm, turn_tainted=True)
+    assert len(calls) == 1  # POST to an approved domain still confirms
+
+    other_call = ToolCall("i", "http_request",
+                          json.dumps({"url": "https://other.example/page"}))
+    agent._dispatch_maybe_tainted(reg, other_call, ctx, confirm, turn_tainted=True)
+    assert len(calls) == 2  # a new domain still confirms
+
+
 def test_tainting_tool_own_turn_is_not_gated(project, cfg, monkeypatch):
     _patch_fetch(monkeypatch)
     cfg.set("plan_build_tasks", False)

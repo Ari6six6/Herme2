@@ -208,3 +208,13 @@ and the alternative I passed on. Newest at the bottom of each feature.
 - **Extensible for the Docker/browser phase.** When sandboxed-runtime output tools
   arrive, adding their names to `TAINTING_TOOLS` extends the rail with no other
   change — the reason the set is a single named constant.
+- **Per-domain read caching, added later.** Without it, any run that fetches more
+  than once (search, then read a result; read a paginated API) re-prompts on
+  every tainted turn even for the same trusted site, which trains the owner to
+  reflexively hit "y" — the opposite of a safety rail. `ToolContext.approved_domains`
+  remembers a domain once the owner approves a GET/HEAD `http_request` to it, and
+  the taint gate skips the prompt for further reads of that domain for the rest of
+  the run. Scoped narrowly on purpose: state-changing requests (POST etc.) always
+  confirm regardless of domain, a new domain always confirms, and the cache is
+  per-run (not persisted), so a stale approval from an earlier run can't be
+  leveraged by a later prompt-injected page.
