@@ -32,15 +32,46 @@ _INSTALL_DOCKER = (
 )
 
 
+def _require_usable(ep, runtime: str) -> None:
+    """A *present* runtime is not a *usable* one. If the Hermes user can't reach the
+    daemon, `build serve` would otherwise die deep inside a reconstruction with a
+    cryptic 'permission denied ... docker.sock' — and the agent falls back to the
+    GPU box. Catch it here, at provision time, with the actual fix instead of a
+    guess."""
+    from hermes.sandbox import runtime_usable
+
+    ok, detail = runtime_usable(ep, runtime)
+    if ok:
+        return
+    low = detail.lower()
+    if "permission denied" in low or "docker.sock" in low or "/run/docker" in low:
+        raise SandboxError(
+            f"{runtime} is installed but this user can't reach its daemon "
+            "(permission denied on the socket). Add yourself to the `docker` group "
+            "and start a fresh login shell, then re-run `sandbox provision`:\n"
+            '    sudo usermod -aG docker "$(id -un)" && newgrp docker\n'
+            f"(or run hermes as root). [daemon said: {detail[-160:]}]"
+        )
+    if "cannot connect" in low or "daemon running" in low or "refused" in low:
+        raise SandboxError(
+            f"{runtime} is installed but its daemon isn't running. Start it and "
+            "re-run `sandbox provision`:\n    sudo systemctl start docker\n"
+            f"[daemon said: {detail[-160:]}]"
+        )
+    raise SandboxError(f"{runtime} is installed but not usable: {detail[-200:]}")
+
+
 def ensure_runtime(ep, on_event=None) -> str:
     """Return the container runtime name on the VPS, installing Docker if none is
-    present. Raises SandboxError if it still isn't usable afterwards."""
+    present. Raises SandboxError if it still isn't usable afterwards — installed but
+    unreachable (wrong group / dead daemon) counts as not usable."""
     def emit(text):
         if on_event:
             on_event(text)
 
     runtime = probe_container_runtime(ep)
     if runtime:
+        _require_usable(ep, runtime)  # present isn't enough — it must be reachable
         return runtime
 
     emit("no container runtime found — installing docker.io (first time only)")
@@ -55,5 +86,6 @@ def ensure_runtime(ep, on_event=None) -> str:
             "installed docker.io but no runtime is callable — check the VPS "
             "(is the docker daemon running? `systemctl status docker`)"
         )
+    _require_usable(ep, runtime)
     emit(f"{runtime} ready")
     return runtime

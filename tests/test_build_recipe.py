@@ -12,10 +12,11 @@ def _open_twin(project):
 
 
 # build_run execs inside the twin container via ctx.sandbox. The bring-up of a
-# fresh container is: ensure_runtime probe(docker) · ps -a(not exists) · run -d ·
-# exec mkdir · then the step exec. These helpers script that.
+# fresh container is: ensure_runtime probe(docker) · ps(usable) · ps -a(not exists)
+# · run -d · exec mkdir · then the step exec. These helpers script that.
 def _create_then(step_result):
-    return [(0, "docker\n", ""), (0, "", ""), (0, "cid", ""), (0, "", ""), step_result]
+    return [(0, "docker\n", ""), (0, "", ""), (0, "", ""),
+            (0, "cid", ""), (0, "", ""), step_result]
 
 
 def _ctx(project, cfg, sandbox):
@@ -64,8 +65,9 @@ def test_build_run_records_network_install_in_container(project, cfg):
 
 def test_build_run_reuses_existing_container(project, cfg):
     _open_twin(project)
-    # probe(docker) · ps -a(EXISTS) -> skip run/mkdir · step exec
+    # probe(docker) · ps(usable) · ps -a(EXISTS) -> skip run/mkdir · step exec
     sb = FakeEndpoint(responses=[(0, "docker\n", ""),
+                                 (0, "", ""),
                                  (0, "hermes-twin-testproj\n", ""),
                                  (0, "ok", "")])
     out = build_run.fn({"command": "echo hi"}, _ctx(project, cfg, sb))
