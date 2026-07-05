@@ -29,6 +29,18 @@ def probe_container_runtime(ep) -> str:
     return found if found in ("docker", "podman") else ""
 
 
+def runtime_usable(ep, runtime: str) -> tuple[bool, str]:
+    """Can the *current user* actually reach the runtime's daemon? A runtime can be
+    installed (on PATH) yet unusable — the Hermes user isn't in the `docker` group,
+    so the socket rejects it, or the daemon isn't running. `<runtime> ps` is a cheap
+    round-trip that needs a live, permitted daemon connection. Returns (ok, detail)
+    so the caller can surface the real reason instead of a generic guess."""
+    if not runtime:
+        return False, "no container runtime installed"
+    rc, out, err = ep.run(f"{runtime} ps", timeout=30)
+    return rc == 0, (err or out or "").strip()
+
+
 def probe_kvm(ep) -> bool:
     """Does the box expose /dev/kvm? Gate for the future Firecracker microVM path
     — most cheap VPSes are themselves KVM guests with nested virt OFF, so this is

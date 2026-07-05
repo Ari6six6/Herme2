@@ -61,3 +61,43 @@ def test_ensure_runtime_raises_when_install_fails():
         assert False, "expected SandboxError"
     except provision.SandboxError as e:
         assert "no space left" in str(e)
+
+
+def test_runtime_usable_true_false():
+    ok, _ = sandbox.runtime_usable(FakeEndpoint(responses=[(0, "", "")]), "docker")
+    assert ok is True
+    ok, detail = sandbox.runtime_usable(
+        FakeEndpoint(responses=[(1, "", "permission denied ... docker.sock")]), "docker"
+    )
+    assert ok is False and "permission denied" in detail
+    ok, _ = sandbox.runtime_usable(FakeEndpoint(), "")
+    assert ok is False
+
+
+def test_ensure_runtime_rejects_present_but_unreachable():
+    # docker is on PATH (probe ok) but `docker ps` is denied — the exact case that
+    # made the agent fall back to the GPU box. Provision must fail loud, with the fix.
+    ep = FakeEndpoint(responses=[
+        (0, "docker\n", ""),  # probe: present
+        (1, "", "permission denied while trying to connect to the docker API "
+                "at unix:///var/run/docker.sock"),  # ps: denied
+    ])
+    try:
+        provision.ensure_runtime(ep)
+        assert False, "expected SandboxError"
+    except provision.SandboxError as e:
+        msg = str(e)
+        assert "usermod -aG docker" in msg  # the actionable fix is in the message
+        assert not any("apt-get" in c for c in ep.calls)  # present → never re-installs
+
+
+def test_ensure_runtime_reports_dead_daemon():
+    ep = FakeEndpoint(responses=[
+        (0, "docker\n", ""),
+        (1, "", "Cannot connect to the Docker daemon. Is the docker daemon running?"),
+    ])
+    try:
+        provision.ensure_runtime(ep)
+        assert False, "expected SandboxError"
+    except provision.SandboxError as e:
+        assert "systemctl start docker" in str(e)
