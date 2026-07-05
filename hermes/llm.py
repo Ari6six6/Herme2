@@ -80,7 +80,14 @@ class OpenAIBackend:
                 if resp.status_code >= 500:
                     last_error = f"HTTP {resp.status_code}: {resp.text[:200]}"
                     continue
-                resp.raise_for_status()
+                if resp.status_code >= 400:
+                    # Client errors (bad request, context overflow, unsupported
+                    # param, ...) won't fix themselves on retry — fail fast, and
+                    # surface the body: it's the only place the real reason lives.
+                    raise LLMTransportError(
+                        f"{self.url} rejected the request: HTTP {resp.status_code}: "
+                        f"{resp.text[:500]}"
+                    )
                 try:
                     msg = resp.json()["choices"][0]["message"]
                 except (ValueError, KeyError, IndexError, TypeError) as e:

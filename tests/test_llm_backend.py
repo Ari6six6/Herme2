@@ -148,6 +148,23 @@ def test_transport_error_raises_after_retries(monkeypatch):
     assert "vLLM unreachable" in str(exc.value)
 
 
+def test_4xx_raises_immediately_with_body(monkeypatch):
+    monkeypatch.setattr("hermes.llm.time.sleep", lambda _s: None)
+    calls = {"n": 0}
+
+    def handler(request):
+        calls["n"] += 1
+        return httpx.Response(400, text="context length exceeded")
+
+    backend = make_backend(handler)
+    with pytest.raises(LLMTransportError) as exc:
+        backend.chat([{"role": "user", "content": "go"}])
+    assert "HTTP 400" in str(exc.value)
+    assert "context length exceeded" in str(exc.value)
+    # client errors aren't retried — a bad request won't fix itself
+    assert calls["n"] == 1
+
+
 def test_persistent_5xx_raises(monkeypatch):
     monkeypatch.setattr("hermes.llm.time.sleep", lambda _s: None)
 
