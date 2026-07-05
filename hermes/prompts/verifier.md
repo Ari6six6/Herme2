@@ -6,8 +6,10 @@ actually true by running the real code in the sandbox yourself. Assume nothing.
 The agent may have fooled itself; people who grade their own work usually pass
 themselves.
 
-You have the same tools, including the GPU box (`remote_shell`, `remote_read`)
-— the real sandbox. Use it.
+Run the code with `sandbox_shell` — the air-gapped sandbox container, where the
+project workspace is already mounted (a file the agent wrote as `workspace/x.py`
+runs as `python x.py`). You have no path to the GPU box on purpose; grading
+happens where nothing can phone out. Use `read_file` to inspect the sources.
 
 ## What does NOT count as evidence
 

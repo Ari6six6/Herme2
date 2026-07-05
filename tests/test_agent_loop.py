@@ -4,7 +4,7 @@ from hermes import agent
 from hermes.llm import MockBackend
 
 
-def run_agent(project, cfg, script, confirm=None, gpu=None):
+def run_agent(project, cfg, script, confirm=None, gpu=None, sandbox=None):
     # The planner/referee are exercised in test_planner_referee; keep these
     # loop-mechanics tests free of the extra build-mode passes.
     cfg.set("plan_build_tasks", False)
@@ -16,6 +16,7 @@ def run_agent(project, cfg, script, confirm=None, gpu=None):
         cfg,
         backend,
         gpu=gpu,
+        sandbox=sandbox,
         env={},
         confirm_fn=confirm or (lambda *a, **k: True),
     )
@@ -271,7 +272,7 @@ def test_echo_result_skips_empty(capsys):
     assert capsys.readouterr().out == ""
 
 
-SANDBOX = object()  # a non-None stand-in for an attached GPU box
+SANDBOX = object()  # a non-None stand-in for an attached sandbox host
 
 
 def test_verification_runs_only_with_a_sandbox(project, cfg):
@@ -303,7 +304,7 @@ def test_verification_passes_lets_run_finish(project, cfg):
             # verifier pass (same backend, next script items):
             {"text": "Ran python m.py, output 4. VERDICT: PASS"},
         ],
-        gpu=SANDBOX,
+        sandbox=SANDBOX,
     )
     assert not result.aborted
     assert result.summary == "done"
@@ -326,7 +327,7 @@ def test_verification_fail_bounces_then_doer_fixes(project, cfg):
             {"tool": "finish_run", "args": {"summary": "fixed it"}},
             {"text": "Ran it, no error. VERDICT: PASS"},  # round 2
         ],
-        gpu=SANDBOX,
+        sandbox=SANDBOX,
     )
     assert not result.aborted
     assert result.summary == "fixed it"
@@ -348,7 +349,7 @@ def test_verification_budget_stops_relooping(project, cfg):
             # doer re-finishes; no budget left -> accepted without another pass
             {"tool": "finish_run", "args": {"summary": "second attempt"}},
         ],
-        gpu=SANDBOX,
+        sandbox=SANDBOX,
     )
     assert not result.aborted
     assert result.summary == "second attempt"
@@ -366,7 +367,7 @@ def test_verifier_can_use_tools_before_verdict(project, cfg):
             {"tool": "read_file", "args": {"path": "workspace/m.py"}},
             {"text": "Saw print('hi'); ran it. VERDICT: PASS"},
         ],
-        gpu=SANDBOX,
+        sandbox=SANDBOX,
     )
     assert not result.aborted
     assert result.summary == "done"
@@ -383,7 +384,7 @@ def test_no_verification_for_non_code_runs(project, cfg):
             {"tool": "write_note", "args": {"text": "nginx looked fine"}},
             {"tool": "finish_run", "args": {"summary": "checked, all good"}},
         ],
-        gpu=SANDBOX,
+        sandbox=SANDBOX,
     )
     assert not result.aborted
     assert result.summary == "checked, all good"

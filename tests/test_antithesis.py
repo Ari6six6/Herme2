@@ -23,7 +23,7 @@ def _run(project, cfg, script):
     cfg.set("plan_build_tasks", False)  # planner is exercised in test_planner_referee
     with serve_reference_twin(project.twin_dir, cfg.get("twin_port", 8900)):
         return agent.run(project, "build /ping", cfg, MockBackend(script),
-                         gpu=SANDBOX, env={}, confirm_fn=lambda *a, **k: True)
+                         gpu=None, sandbox=SANDBOX, env={}, confirm_fn=lambda *a, **k: True)
 
 
 def test_antithesis_passes_when_outputs_match(project, cfg):

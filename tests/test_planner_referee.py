@@ -20,10 +20,10 @@ def _seal(project):
     twin.seal()
 
 
-def _run(project, cfg, script, gpu=None):
+def _run(project, cfg, script, sandbox=None):
     with serve_reference_twin(project.twin_dir, cfg.get("twin_port", 8900)):
         return agent.run(project, "make /ping return pong", cfg, MockBackend(script),
-                         gpu=gpu, env={}, confirm_fn=lambda *a, **k: True)
+                         gpu=None, sandbox=sandbox, env={}, confirm_fn=lambda *a, **k: True)
 
 
 def _transcript(project, run="0001"):
@@ -41,7 +41,7 @@ def test_planner_runs_in_build_mode_and_logs_the_plan(project, cfg):
          "args": {"path": "workspace/app.py", "content": "print('pong')"}},
         {"tool": "twin_request", "args": {"path": "/ping"}},
         {"tool": "finish_run", "args": {"summary": "done"}},
-    ], gpu=None)
+    ], sandbox=None)
     assert not result.aborted
     tx = _transcript(project)
     assert '"role": "planner"' in tx
@@ -56,7 +56,7 @@ def test_planner_off_by_config(project, cfg):
          "args": {"path": "workspace/app.py", "content": "print('pong')"}},
         {"tool": "twin_request", "args": {"path": "/ping"}},
         {"tool": "finish_run", "args": {"summary": "done"}},
-    ], gpu=None)
+    ], sandbox=None)
     assert not result.aborted
     assert '"role": "planner"' not in _transcript(project)
 
@@ -67,7 +67,7 @@ def test_planner_does_not_run_without_a_sealed_twin(project, cfg):
     result = _run(project, cfg, [
         {"tool": "write_file", "args": {"path": "workspace/x.py", "content": "1"}},
         {"tool": "finish_run", "args": {"summary": "done"}},
-    ], gpu=None)
+    ], sandbox=None)
     assert not result.aborted
     assert '"role": "planner"' not in _transcript(project)
 
@@ -91,7 +91,7 @@ def test_referee_overturns_antithesis_on_deadlock(project, cfg):
         {"text": "still no. VERDICT: FAIL"},
         {"tool": "twin_request", "args": {"path": "/ping"}},      # referee investigates
         {"text": "i ran both: pong == pong; antithesis was wrong. VERDICT: PASS"},
-    ], gpu=SANDBOX)
+    ], sandbox=SANDBOX)
     assert not result.aborted
     assert result.summary == "v2 still right"
     assert '"role": "referee"' in _transcript(project)
@@ -113,7 +113,7 @@ def test_referee_upholds_antithesis_then_doer_fixes(project, cfg):
         {"tool": "twin_request", "args": {"path": "/ping"}},      # referee investigates
         {"text": "ran it: nope != pong; antithesis right. VERDICT: FAIL"},
         {"tool": "finish_run", "args": {"summary": "v3 fixed for real"}},  # accepted
-    ], gpu=SANDBOX)
+    ], sandbox=SANDBOX)
     assert not result.aborted
     assert result.summary == "v3 fixed for real"
     assert "A REFEREE was brought in" in _transcript(project)  # the referee nudge
@@ -134,7 +134,7 @@ def test_referee_off_accepts_after_rounds_spent(project, cfg):
         {"tool": "twin_request", "args": {"path": "/ping"}},      # antithesis round 2
         {"text": "VERDICT: FAIL"},
         {"tool": "finish_run", "args": {"summary": "v3 accepted unverified"}},
-    ], gpu=SANDBOX)
+    ], sandbox=SANDBOX)
     assert not result.aborted
     assert result.summary == "v3 accepted unverified"
     assert '"role": "referee"' not in _transcript(project)

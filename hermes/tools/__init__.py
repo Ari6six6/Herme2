@@ -36,6 +36,15 @@ class ToolRegistry:
     def schemas(self) -> list[dict]:
         return [t.schema() for t in self._tools.values()]
 
+    def without(self, names) -> "ToolRegistry":
+        """A shallow clone with `names` removed. Used to hand the verification
+        pass a toolset that has no path to the GPU box, so grading runs only in
+        the air-gapped sandbox — the doer can still hold those tools."""
+        drop = set(names)
+        clone = ToolRegistry()
+        clone._tools = {n: t for n, t in self._tools.items() if n not in drop}
+        return clone
+
     # -- dispatch ----------------------------------------------------------
     def dispatch(self, name: str, arguments: str, ctx: ToolContext) -> str:
         t = self._tools.get(name)
@@ -183,7 +192,7 @@ def toolbox_catalog() -> str:
 
 def build_registry(project, cfg, confirm_fn) -> ToolRegistry:
     from hermes import hosts as hosts_mod
-    from hermes.tools import local_fs, local_shell, meta, remote, web
+    from hermes.tools import local_fs, local_shell, meta, remote, sandbox_tools, web
     from hermes.twin.model import TwinModel
 
     registry = ToolRegistry()
@@ -199,7 +208,7 @@ def build_registry(project, cfg, confirm_fn) -> ToolRegistry:
     sealed = twin_model.is_sealed()
     live_touch = (not sealed) or cfg.get("build_live_touch", False)
 
-    for module in (local_fs, local_shell, remote, meta):
+    for module in (local_fs, local_shell, remote, sandbox_tools, meta):
         for t in module.TOOLS:
             registry.register(t)
     if live_touch:

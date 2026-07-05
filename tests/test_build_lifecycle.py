@@ -10,10 +10,10 @@ SANDBOX = object()
 yes = lambda *a, **k: True
 
 
-def _run(project, cfg, prompt, script, gpu):
+def _run(project, cfg, prompt, script, sandbox):
     cfg.set("plan_build_tasks", False)  # planner is exercised in test_planner_referee
     with serve_reference_twin(project.twin_dir, cfg.get("twin_port", 8900)):
-        return agent.run(project, prompt, cfg, MockBackend(script), gpu=gpu, env={},
+        return agent.run(project, prompt, cfg, MockBackend(script), gpu=None, sandbox=sandbox, env={},
                          confirm_fn=yes)
 
 
@@ -32,7 +32,7 @@ def test_recon_to_build_full_lifecycle(project, cfg):
                   "content_type": "text/plain"}},
         {"tool": "twin_seal", "args": {}},
         {"tool": "finish_run", "args": {"summary": "twin sealed: /ping -> pong"}},
-    ], gpu=None)
+    ], sandbox=None)
     assert not r1.aborted
     assert project.twin().is_sealed()
 
@@ -48,7 +48,7 @@ def test_recon_to_build_full_lifecycle(project, cfg):
         # antithesis runs the twin and confirms parity with executed evidence
         {"tool": "twin_request", "args": {"path": "/ping"}},
         {"text": "solution prints pong; twin /ping -> pong. match. VERDICT: PASS"},
-    ], gpu=SANDBOX)
+    ], sandbox=SANDBOX)
     assert not r2.aborted
     assert r2.summary == "/ping returns pong"
     transcript = (project.runs_dir / "0002" / "transcript.jsonl").read_text()
@@ -70,7 +70,7 @@ def test_build_phase_rejects_unproven_claim_end_to_end(project, cfg):
         {"tool": "finish_run", "args": {"summary": "trust me bro"}},   # bounced
         {"tool": "twin_request", "args": {"path": "/ping"}},
         {"tool": "finish_run", "args": {"summary": "checked it"}},
-    ], gpu=None)  # no sandbox -> isolate the build-proof gate from the antithesis
+    ], sandbox=None)  # no sandbox -> isolate the build-proof gate from the antithesis
     assert not r.aborted
     assert r.summary == "checked it"
     transcript = (project.runs_dir / "0001" / "transcript.jsonl").read_text()

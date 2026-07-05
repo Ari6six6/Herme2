@@ -43,14 +43,15 @@ BUILD_PROOF_TOOLS = frozenset({"twin_request", "twin_reground"})
 # twin_map, ...) is not evidence: in build mode a VERDICT: PASS backed only by a
 # read is collusion theater (the critic just eyeballed the code and agreed).
 VERIFY_EVIDENCE_TOOLS = frozenset({
-    "remote_shell", "local_shell", "host_shell", "build_run", "twin_request",
+    "remote_shell", "sandbox_shell", "local_shell", "host_shell", "build_run",
+    "twin_request",
 })
 
 # Tools that actually EXECUTE something (vs. just reading/writing) — the evidence
 # that a verification step really happened this run (feature 7).
 EXECUTION_TOOLS = frozenset({
-    "local_shell", "remote_shell", "host_shell", "build_run", "twin_request",
-    "http_request",
+    "local_shell", "sandbox_shell", "remote_shell", "host_shell", "build_run",
+    "twin_request", "http_request",
 })
 
 # Tools whose output enters context FROM THE NETWORK (or the live target) — i.e.
@@ -63,6 +64,14 @@ TAINTING_TOOLS = frozenset({
     "http_request", "web_search", "twin_expand", "twin_reground",
 })
 
+# Tools that reach the GPU box (a networked machine). The verification pass must
+# never touch these: grading runs only in the air-gapped sandbox, so a solution
+# can't be "verified" by code that quietly phoned out from the GPU. The doer may
+# still hold them; the verifier gets a registry with them stripped.
+GPU_TOOLS = frozenset({
+    "remote_shell", "remote_read", "remote_write", "transfer", "replicate",
+})
+
 # A fenced, multi-line code block in the final answer: ```lang\n...\n```
 CODE_FENCE_RE = re.compile(r"```[^\n]*\n.*?```", re.S)
 
@@ -73,7 +82,7 @@ PRODUCTIVE_TOOLS = frozenset({
     "write_file", "edit_file",
     "remote_write", "remote_shell",
     "host_write", "host_shell",
-    "local_shell", "forge_tool",
+    "local_shell", "sandbox_shell", "forge_tool",
     "transfer", "replicate", "download_file",
 })
 
@@ -177,10 +186,11 @@ def run(project, prompt, cfg, backend, gpu=None, env=None, confirm_fn=None,
     # run finishes without having executed anything. Cheap, no sandbox needed.
     verify_before_done_left = 1 if cfg.get("verify_before_done", False) else 0
     # Independent verification only runs when there's a real sandbox to run the
-    # code in (a GPU box) and the operator hasn't switched it off.
+    # code in — now the air-gapped VPS container, not the GPU box — and the
+    # operator hasn't switched it off.
     verify_rounds_left = (
         cfg.get("verify_rounds", 2)
-        if cfg.get("verify_code_runs", True) and gpu is not None
+        if cfg.get("verify_code_runs", True) and sandbox is not None
         else 0
     )
     consecutive_errors = 0
@@ -358,8 +368,12 @@ def run(project, prompt, cfg, backend, gpu=None, env=None, confirm_fn=None,
                         "  (antithesis — breaking the solution against the twin)"
                         if twin_sealed else
                         "  (independent verification — re-running the code in the sandbox)"))
+                    # The verifier grades in the air-gapped sandbox only — strip
+                    # every GPU-reaching tool so it can't run (or "confirm") the
+                    # solution on a networked box.
+                    verify_registry = registry.without(GPU_TOOLS)
                     passed, report = _verify(
-                        backend, registry, ctx, prompt, files_touched, log,
+                        backend, verify_registry, ctx, prompt, files_touched, log,
                         cfg.get("verify_max_turns", 6), build=twin_sealed,
                         think_re=think_re,
                     )
@@ -373,7 +387,7 @@ def run(project, prompt, cfg, backend, gpu=None, env=None, confirm_fn=None,
                             print(magenta("  (referee — builder and antithesis "
                                           "deadlocked; making the final call)"))
                             ref_passed, ref_report = _referee(
-                                backend, registry, ctx, prompt, files_touched,
+                                backend, verify_registry, ctx, prompt, files_touched,
                                 report, log, cfg.get("verify_max_turns", 6),
                                 think_re=think_re,
                             )

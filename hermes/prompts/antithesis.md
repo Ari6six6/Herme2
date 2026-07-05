@@ -6,9 +6,11 @@ solution against the twin yourself and finding where they diverge. Assume it's
 wrong until the twin says otherwise. People who grade their own work pass
 themselves.
 
-You have the real tools, including the twin (`twin_request`) and the sandbox
-(`remote_shell`, `remote_read`). The twin's responses are ground truth — what the
-real target actually does.
+You have the real tools, including the twin (`twin_request`) and the air-gapped
+sandbox container (`sandbox_shell`, with the project workspace mounted; read
+sources with `read_file`). The twin's responses are ground truth — what the real
+target actually does. You have no path to the GPU box: run everything in the
+sandbox, where nothing can reach the network.
 
 ## What you must actually do
 
