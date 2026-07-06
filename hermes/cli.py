@@ -57,6 +57,29 @@ def _probe_vllm(cfg) -> bool:
         return False
 
 
+def _remote_server_alive(ep) -> bool:
+    """Is a vLLM/llama.cpp process still running on the box, per ~/vllm.pid?
+    Distinguishes "still warming up" from "never launched" when the tunnel
+    is up but the endpoint isn't answering yet."""
+    if ep is None:
+        return False
+    rc, out, _ = ep.run(
+        "cat ~/vllm.pid 2>/dev/null && kill -0 $(cat ~/vllm.pid) 2>/dev/null && echo RUNNING",
+        timeout=15,
+    )
+    return "RUNNING" in out
+
+
+def _vllm_down_hint(ep) -> str:
+    """Why the endpoint isn't reachable, for status/tunnel/run messages."""
+    if ep is None:
+        return "`gpu attach` + `gpu serve` first"
+    if _remote_server_alive(ep):
+        return ("server process is up but not answering yet — still loading "
+                "weights (`remote tail -n 50 ~/vllm.log`)")
+    return "no model server running on the box — `gpu serve` first"
+
+
 def _ensure_tunnel(cfg, state) -> None:
     """Best effort: restart the tunnel if the pid died."""
     ep = endpoint_from_state(state)
@@ -149,7 +172,7 @@ def cmd_run(cfg, args: str) -> None:
         if state.get("host"):
             _ensure_tunnel(cfg, state)
         if not _probe_vllm(cfg):
-            print(red("vLLM endpoint not reachable") + dim(" — `gpu attach` + `gpu serve` first "
+            print(red("vLLM endpoint not reachable") + dim(f" — {_vllm_down_hint(gpu)} "
                   "(or `config set backend mock` for a dry run)."))
             return
     from hermes.models import resolve
@@ -363,8 +386,11 @@ def cmd_gpu(cfg, args: str) -> None:
               + (dim(f" (vast id {state['instance_id']})") if state.get("instance_id") else ""))
         print(f"tunnel: pid {state.get('tunnel_pid')} "
               + (green("alive") if pid_alive(state.get("tunnel_pid", 0)) else red("dead")))
-        print("vllm endpoint: " + (green("UP") if _probe_vllm(cfg) else red("down")))
         ep = endpoint_from_state(state)
+        if _probe_vllm(cfg):
+            print("vllm endpoint: " + green("UP"))
+        else:
+            print("vllm endpoint: " + red("down") + dim(f" — {_vllm_down_hint(ep)}"))
         rc, out, _ = ep.run(
             "nvidia-smi --query-gpu=name,memory.used,memory.total --format=csv,noheader",
             timeout=20,
@@ -374,8 +400,11 @@ def cmd_gpu(cfg, args: str) -> None:
 
     elif sub == "tunnel":
         _ensure_tunnel(cfg, state)
-        print("tunnel " + (green("up") if _probe_vllm(cfg)
-                           else yellow("started (endpoint not answering yet)")))
+        if _probe_vllm(cfg):
+            print("tunnel " + green("up"))
+        else:
+            ep = endpoint_from_state(state)
+            print("tunnel started" + dim(f" — {_vllm_down_hint(ep)}"))
 
     elif sub in ("up", "resume"):
         iid = state.get("instance_id")
