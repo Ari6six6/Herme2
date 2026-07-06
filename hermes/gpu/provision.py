@@ -15,11 +15,14 @@ Both write ~/vllm.pid and ~/vllm.log so `gpu status`/`down` stay runtime-agnosti
 
 from __future__ import annotations
 
+import re
+import sys
 import time
 from dataclasses import dataclass, field
 
 import httpx
 
+from hermes import ui
 from hermes.models import ModelSpec, resolve
 from hermes.ui import dim, yellow
 
@@ -223,23 +226,109 @@ def launch(endpoint, cfg, plan: ServePlan, spec: ModelSpec | None = None) -> Non
         raise ProvisionError(f"launch failed: {err.strip()[-800:]}")
 
 
-def wait_ready(endpoint, cfg, deadline_s: int = 1800) -> bool:
-    """Poll the tunneled endpoint; stream fresh vllm.log lines meanwhile."""
+# Both runtimes pull weights into one of these caches: llama.cpp writes the GGUF
+# under ~/.cache/llama.cpp; vLLM (via HF hub / hf_transfer) writes blobs under
+# ~/.cache/huggingface. Summing both dirs catches whichever is in play, plus any
+# .incomplete/partial files, so the number tracks bytes actually on disk.
+_CACHE_DIRS = "~/.cache/llama.cpp ~/.cache/huggingface"
+
+
+def _weights_total_bytes(spec: ModelSpec) -> int | None:
+    """The approximate download size, parsed from the model's own weights_note
+    (e.g. '~19GB'), used only as the progress denominator. None → show bytes and
+    rate without a percentage rather than guess."""
+    m = re.search(r"(\d+(?:\.\d+)?)\s*GB", spec.weights_note or "")
+    return int(float(m.group(1)) * 1_000_000_000) if m else None
+
+
+def _fmt_size(n: int) -> str:
+    if n >= 1_000_000_000:
+        return f"{n / 1_000_000_000:.1f} GB"
+    return f"{n / 1_000_000:.0f} MB"
+
+
+def _cache_bytes(endpoint) -> int | None:
+    """Bytes currently sitting in the weight caches on the box, or None if the
+    probe failed (never let a flaky poll abort the wait)."""
+    rc, out, _ = endpoint.run(
+        f"du -sb {_CACHE_DIRS} 2>/dev/null | awk '{{s+=$1}} END{{print s+0}}'",
+        timeout=20,
+    )
+    if rc != 0:
+        return None
+    try:
+        return int(out.strip() or 0)
+    except ValueError:
+        return None
+
+
+def wait_ready(endpoint, cfg, spec: ModelSpec | None = None, deadline_s: int = 1800) -> bool:
+    """Poll the tunneled endpoint until the model answers. While the box is
+    still pulling weights, show a single in-place line — how much has landed,
+    the % of the expected total, and the live MB/s so a dead network is obvious
+    at a glance. Once the bytes stop growing (weights loading into VRAM), fall
+    back to streaming fresh log lines so warm-up and errors stay visible."""
+    spec = spec or resolve(cfg)
     url = f"http://127.0.0.1:{cfg.get('local_port', 8000)}/v1/models"
+    total = _weights_total_bytes(spec)
     start = time.time()
-    seen_bytes = 0
+    seen_bytes = 0          # log bytes already streamed
+    baseline = None         # cache size before this pull (warm cache stays honest)
+    last = None             # (t, bytes) of the previous cache sample, for the rate
+    progress_active = False  # a \r line is currently on screen
+
+    def _clear_progress():
+        nonlocal progress_active
+        if progress_active:
+            sys.stdout.write("\n")
+            sys.stdout.flush()
+            progress_active = False
+
     while time.time() - start < deadline_s:
         try:
             if httpx.get(url, timeout=5).status_code == 200:
+                _clear_progress()
                 return True
         except httpx.HTTPError:
             pass
-        rc, out, _ = endpoint.run(
-            f"tail -c +{seen_bytes + 1} ~/vllm.log 2>/dev/null", timeout=20
-        )
-        if rc == 0 and out:
-            seen_bytes += len(out.encode())
-            for line in out.splitlines()[-30:]:
-                print(dim("  | " + line[:160]))
-        time.sleep(5)
+
+        now = time.time()
+        cur = _cache_bytes(endpoint)
+        # >1MB since the last sample = an active download, not measurement noise.
+        growing = cur is not None and last is not None and cur > last[1] + 1_000_000
+        if cur is not None and baseline is None:
+            baseline = cur
+
+        if growing:
+            downloaded = max(0, cur - baseline)
+            rate = (cur - last[1]) / (now - last[0]) if now > last[0] else 0.0
+            bar = f"  downloading  {_fmt_size(downloaded)}"
+            if total:
+                bar += f" / ~{_fmt_size(total)} ({min(99, int(downloaded * 100 / total))}%)"
+            if rate > 0:
+                bar += f"  ·  {rate / 1_000_000:.0f} MB/s"
+            if ui.ENABLED:
+                sys.stdout.write("\r\x1b[2K" + dim(bar))
+                sys.stdout.flush()
+                progress_active = True
+            elif not progress_active or (now - last[0]) >= 30:
+                # piped/dumb output: a full line, at most every ~30s
+                print(dim(bar.strip()))
+                progress_active = True
+            last = (now, cur)
+        else:
+            # Idle (building, or weights loading into VRAM): show fresh log lines.
+            _clear_progress()
+            rc, out, _ = endpoint.run(
+                f"tail -c +{seen_bytes + 1} ~/vllm.log 2>/dev/null", timeout=20
+            )
+            if rc == 0 and out:
+                seen_bytes += len(out.encode())
+                for line in out.splitlines()[-30:]:
+                    print(dim("  | " + line[:160]))
+            if cur is not None:
+                last = (now, cur)
+        time.sleep(2)
+
+    _clear_progress()
     return False
