@@ -1,4 +1,4 @@
-"""Local filesystem tools — run on the phone, scoped to the project dir.
+"""Local filesystem tools — run on the VPS, scoped to the project dir.
 
 Policy: anything inside the project directory is free. Reads outside it ask
 the operator. Writes outside it are denied outright.
@@ -27,7 +27,7 @@ def _resolve_read(args_path: str, ctx) -> Path:
 @tool(
     "read_file",
     "Read a text file. Paths are relative to the project directory on the "
-    "phone. Reading outside the project asks the operator first.",
+    "VPS. Reading outside the project asks the operator first.",
     obj_schema(
         {
             "path": {"type": "string", "description": "file path"},
@@ -63,7 +63,7 @@ def read_file(args, ctx):
 
 @tool(
     "write_file",
-    "Create or overwrite a text file inside the project directory on the phone.",
+    "Create or overwrite a text file inside the project directory on the VPS.",
     obj_schema(
         {
             "path": {"type": "string"},

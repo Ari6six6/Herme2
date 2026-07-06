@@ -74,7 +74,7 @@ DEFAULTS: dict = {
     # nudge when a file-mutating run finishes without running anything.
     "verify_before_done": False,
     "gpu_shell": False,  # False: GPU box is the model's host only; code runs in the air-gapped sandbox. True: also expose remote_shell/read/write for on-card compute
-    "allow_gpu_network": False,  # only relevant when gpu_shell is on. False: box may install/build (net), but raw egress + target traffic go via the phone; True: unrestricted box net
+    "allow_gpu_network": False,  # only relevant when gpu_shell is on. False: box may install/build (net), but raw egress + target traffic go via the VPS; True: unrestricted box net
     "sandbox_image": "python:3.12-slim",  # base image for the air-gapped exec container (sandbox_shell)
     "twin_clone_max": 200,  # max requests recording a target's responses makes
     "twin_clone_delay": 0.5,  # polite seconds between reads while recording

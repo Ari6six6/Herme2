@@ -1,5 +1,5 @@
 """Tools for managed hosts — the operator's real servers, reached from the
-phone over SSH.
+VPS over SSH.
 
 These are NOT sandboxes, so the gate has the opposite polarity to the GPU
 box: it fails CLOSED. Only commands positively classified as read-only run

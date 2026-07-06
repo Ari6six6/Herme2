@@ -1,6 +1,6 @@
-"""Web tools — these run ON THE PHONE, by design.
+"""Web tools — these run ON THE VPS, by design.
 
-The operator's hard rule: all internet goes through the phone, never the GPU
+The operator's hard rule: all internet goes through the VPS, never the GPU
 box. GET/HEAD are free; anything that changes state on the web (POST etc.)
 is operator-confirmed.
 """
@@ -52,7 +52,7 @@ def html_to_text(html: str) -> str:
 
 @tool(
     "http_request",
-    "Make an HTTP request FROM THE PHONE. GET/HEAD run freely; other methods "
+    "Make an HTTP request FROM THE VPS. GET/HEAD run freely; other methods "
     "(POST, PUT, ...) ask the operator first. HTML responses are converted "
     "to readable text unless raw=true.",
     obj_schema(
@@ -127,7 +127,7 @@ def _strip_tags(html: str) -> str:
 
 @tool(
     "web_search",
-    "Search the web (DuckDuckGo) FROM THE PHONE. Returns titles, urls and "
+    "Search the web (DuckDuckGo) FROM THE VPS. Returns titles, urls and "
     "snippets. Follow up with http_request to read a page.",
     obj_schema(
         {

@@ -1,7 +1,7 @@
 """The clone engine: point it at a URL, it builds a comprehensive model.
 
 This is the ONE component that touches the live target, and it is operator-driven
-(a CLI action on the phone), never an agent tool — the agent never decides to go
+(a CLI action on the VPS), never an agent tool — the agent never decides to go
 poke a live service. It is benign by construction: read-only methods only, a hard
 cap on requests, a polite delay. It gathers as much as it responsibly can — the
 API spec if the service publishes one, common discovery endpoints, and a
@@ -70,7 +70,7 @@ def _keep(resp_headers: dict) -> dict:
 
 
 def _httpx_fetch(method, url, headers=None, body=None, timeout=45):
-    """Real network read, on the phone. Returns (status, headers, text)."""
+    """Real network read, on the VPS. Returns (status, headers, text)."""
     import httpx
 
     hdrs = {"User-Agent": UA}

@@ -1,4 +1,4 @@
-"""transfer: phone project <-> GPU box, streamed and binary-safe."""
+"""transfer: VPS project <-> GPU box, streamed and binary-safe."""
 
 from conftest import FakeEndpoint
 

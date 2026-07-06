@@ -1,4 +1,4 @@
-"""Local shell on the phone (Termux). ALWAYS operator-confirmed."""
+"""Local shell on the VPS Hermes runs on. ALWAYS operator-confirmed."""
 
 from __future__ import annotations
 
@@ -9,9 +9,9 @@ from hermes.tools.base import obj_schema, tool
 
 @tool(
     "local_shell",
-    "Run a shell command on the operator's phone (Termux). The operator sees "
+    "Run a shell command on the VPS Hermes runs on. The operator sees "
     "the exact command and must approve it. Use for: running scripts you "
-    "wrote for the phone, installing Termux packages, anything local. "
+    "wrote, installing packages, anything local to the VPS. "
     "Runs at the project root by default, so paths match the file tools: a "
     "file you wrote as `workspace/x.py` is run with `python workspace/x.py` "
     "(no `cd workspace` first). Pass `cwd` to start somewhere else.",
@@ -35,7 +35,7 @@ def local_shell(args, ctx):
             cwd = resolve_in(ctx.project.root, args["cwd"])
         except PathDenied:
             return "DENIED: cwd outside the project directory."
-    if not ctx.confirm("agent wants to run a LOCAL shell command on the phone:",
+    if not ctx.confirm("agent wants to run a LOCAL shell command on the VPS:",
                        detail=f"  $ {command}\n  (cwd: {cwd}, timeout: {timeout}s)"):
         return "DENIED by operator."
     try:

@@ -105,7 +105,7 @@ def twin_stack(args, ctx):
 @tool(
     "twin_expand",
     "Grow the twin to cover requests it's missing. Give the paths you need; the "
-    "clone step fetches them from the target (on the phone, never from here) and "
+    "clone step fetches them from the target (on the VPS, never from here) and "
     "folds them into the twin. Use this when twin_request returns a MISS for "
     "something you need.",
     obj_schema(

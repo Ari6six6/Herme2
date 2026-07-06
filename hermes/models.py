@@ -150,7 +150,7 @@ QWEN = ModelSpec(
         "- One tool per step; read its result before the next call. Never paste "
         "shell commands or code as a message expecting someone to run them — run "
         "them yourself with a tool.\n"
-        "- The operator y/n gates and the keep-internet-on-the-phone rule are "
+        "- The operator y/n gates and the keep-internet-on-the-VPS rule are "
         "real, enforced by trust rather than a cage. Honour them; a DENIED "
         "result means adapt your approach, not retry the same call."
     ),
@@ -264,9 +264,9 @@ QWEN_40B = ModelSpec(
         "- One concrete step per turn, and verify with a tool before claiming "
         "success. Never paste code or commands as your message — run them "
         "yourself.\n"
-        "- Your final answer is plain prose for a human on a phone: short, no raw "
+        "- Your final answer is plain prose for a human reading on a small screen: short, no raw "
         "JSON or tool syntax. Respect the operator y/n gates and keep all "
-        "internet on the phone."
+        "internet on the VPS."
     ),
     notes_extra=[
         "First serve builds llama.cpp with CUDA on the box (needs the CUDA "

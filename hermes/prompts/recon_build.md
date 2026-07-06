@@ -22,12 +22,12 @@ GENUINE software so the twin literally *is* the system, top to bottom:
 
 1. **Install the real software inside the twin container** with `build_run` — it
    runs the step *in the container*, which has network, so `apt` / `pip` / `npm`
-   / `git clone` at the detected version all work right there. No phone transfer
+   / `git clone` at the detected version all work right there. No transfer
    needed.
 2. **Stand the stack up with `build_run`** — web server, language runtime, the
    app, and the database/cache/services it depends on. Each successful step is
    captured into the **recipe** — the portable blueprint that lives on the
-   phone. `build serve` boots a fresh container and replays that recipe inside
+   VPS. `build serve` boots a fresh container and replays that recipe inside
    it to respin the whole runtime server without re-deriving anything, so make
    every step **idempotent and self-contained**, in order. Read the real build
    output and iterate — don't assume.

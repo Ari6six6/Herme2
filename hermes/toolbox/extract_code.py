@@ -5,7 +5,7 @@ mode works against it: it SKIPS `<script>` entirely and flattens `<pre>`/
 `<code>` into the surrounding prose, losing newlines and indentation. The code
 is exactly the part it needed.
 
-This fetches a URL (on the phone — the only place with internet), or takes raw
+This fetches a URL (on the VPS — the only place with internet), or takes raw
 `text`, or reads a project file, and returns ONLY the code blocks — verbatim,
 de-entitied — from HTML (`<pre>`, `<code>`, `<script>`) or markdown fences.
 Optionally writes one block to the workspace.
@@ -20,7 +20,7 @@ TOOL = {
     "description": (
         "Extract only the code from a web page or document — the part "
         "http_request drops (<script>) or mangles (<pre>/<code> flattened "
-        "into prose). Source is one of: 'url' (fetched on the phone), inline "
+        "into prose). Source is one of: 'url' (fetched on the VPS), inline "
         "'text', or 'path' (a project file). Pulls HTML <pre>/<code>/<script> "
         "and markdown ``` fences, de-entitied and verbatim. Optional 'lang' "
         "filters by language hint; optional 'save' writes the chosen block "
@@ -29,7 +29,7 @@ TOOL = {
     "parameters": {
         "type": "object",
         "properties": {
-            "url": {"type": "string", "description": "page to fetch on the phone"},
+            "url": {"type": "string", "description": "page to fetch on the VPS"},
             "text": {"type": "string", "description": "raw HTML/markdown to scan"},
             "path": {"type": "string", "description": "a project file to read"},
             "lang": {

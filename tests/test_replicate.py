@@ -1,4 +1,4 @@
-"""replicate: managed host -> phone relay -> GPU sandbox."""
+"""replicate: managed host -> VPS relay -> GPU box workspace."""
 
 from conftest import FakeEndpoint
 
