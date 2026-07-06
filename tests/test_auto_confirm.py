@@ -27,6 +27,11 @@ def test_auto_confirm_bypasses_the_gate_without_prompting(project, cfg, monkeypa
     )
     assert not r.aborted
     assert r.summary == "ran unattended"
+    # The auto-approval must be captured as training data, not just printed.
+    transcript = (project.runs_dir / "0001" / "transcript.jsonl").read_text()
+    assert '"role": "gate"' in transcript
+    assert '"approved": true' in transcript
+    assert '"auto": true' in transcript
 
 
 def test_gate_still_denies_when_auto_confirm_off(project, cfg):
@@ -42,3 +47,6 @@ def test_gate_still_denies_when_auto_confirm_off(project, cfg):
     )
     transcript = (project.runs_dir / "0001" / "transcript.jsonl").read_text()
     assert "DENIED by operator" in transcript
+    # The denial is logged as a gate decision too — the negative training example.
+    assert '"role": "gate"' in transcript
+    assert '"approved": false' in transcript
