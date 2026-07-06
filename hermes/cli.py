@@ -210,7 +210,7 @@ def cmd_project(cfg, args: str) -> None:
         except ProjectError as e:
             print(red(e))
             return
-        cfg.set("current_project", parts[1])
+        cfg.set("current_project", parts[1], coerce=False)
         cfg.save()
         print(green(f"project '{parts[1]}' created and selected.") + dim(" Edit its mission: `mission edit`"))
     elif sub == "build" and len(parts) >= 3:
@@ -223,7 +223,7 @@ def cmd_project(cfg, args: str) -> None:
         except ProjectError as e:
             print(red(e))
             return
-        cfg.set("current_project", name)
+        cfg.set("current_project", name, coerce=False)
         cfg.save()
         report = _attach_target(cfg, project, url)
         print(green(f"build project '{name}' created — "
@@ -239,7 +239,7 @@ def cmd_project(cfg, args: str) -> None:
         except ProjectError as e:
             print(red(e))
             return
-        cfg.set("current_project", parts[1])
+        cfg.set("current_project", parts[1], coerce=False)
         cfg.save()
         print(green(f"switched to '{parts[1]}'"))
     else:

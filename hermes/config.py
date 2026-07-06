@@ -142,13 +142,16 @@ class Config:
             node = node[part]
         return node
 
-    def set(self, key: str, value) -> None:
-        """Dotted-key set with naive type coercion from strings."""
+    def set(self, key: str, value, coerce: bool = True) -> None:
+        """Dotted-key set. Strings are type-coerced (bools/ints/floats) so
+        `config set max_turns 40` stores an int — but pass coerce=False for values
+        that must stay strings even when they look numeric, like a project named
+        "2" (otherwise it becomes int 2 and later `projects_dir / 2` blows up)."""
         parts = key.split(".")
         node = self.data
         for part in parts[:-1]:
             node = node.setdefault(part, {})
-        node[parts[-1]] = _coerce(value)
+        node[parts[-1]] = _coerce(value) if coerce else value
 
     def __getitem__(self, key: str):
         return self.data[key]
