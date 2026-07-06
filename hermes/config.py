@@ -73,6 +73,10 @@ DEFAULTS: dict = {
     # before a task is reported done. Adds a header rule + a one-shot harness
     # nudge when a file-mutating run finishes without running anything.
     "verify_before_done": False,
+    # Self-build (feature 9): the agent's own source, gated far tighter than
+    # project files — off by default, and even when on, a fixed denylist of
+    # safety-critical files (the gates themselves) refuses edits regardless.
+    "self_build_enabled": False,
     "auto_confirm": False,  # True: unattended mode — approve every y/n gate (local_shell, state-changing web, host writes, forged-tool loads) so a run never stalls waiting for an operator who's away
     "gpu_shell": False,  # False: GPU box is the model's host only; code runs in the air-gapped sandbox. True: also expose remote_shell/read/write for on-card compute
     "allow_gpu_network": False,  # only relevant when gpu_shell is on. False: box may install/build (net), but raw egress + target traffic go via the VPS; True: unrestricted box net

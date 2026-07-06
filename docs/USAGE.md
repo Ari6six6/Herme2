@@ -251,6 +251,54 @@ There is no flag. It's a safety boundary, so it's always active. It only ever
 prompts you when untrusted content is actually in scope; a run that never fetches
 anything never sees it. `finish_run` is exempt (ending a run isn't an action).
 
+### Feature 9 — Self-build (agent edits its own source)
+
+Everything above gates what the agent can do *inside a project*. This feature is
+different in kind: it lets the agent read and change **Hermes' own code** —
+the harness it's running inside of, not `<project>/workspace`.
+
+| Flag | Default | Effect |
+|---|---|---|
+| `self_build_enabled` | `false` | register `list_hermes_source` / `read_hermes_source` (free, read-only) and `write_hermes_source` / `edit_hermes_source` (gated) |
+
+Reading and listing are free — the agent can browse its own code any time once
+the flag is on. Writing is gated like `forge_tool`: every write or edit pauses
+for your y/n with a **real diff** (`v` to view it in full), and a timestamped
+copy of the old file lands in `<repo>/.self_build_backups/` before the change
+is written, so a bad self-edit is one copy away from undone.
+
+On top of that, a **fixed denylist** (`PROTECTED` in
+`hermes/tools/self_build.py`) refuses writes outright, regardless of config —
+these are the files that define the gates themselves: `confirm.py`,
+`config.py`, `paths.py`, `agent.py` (the run loop's own safety bookkeeping),
+`checkpoint.py`, `tools/base.py`, `tools/__init__.py` (the registry),
+`tools/local_shell.py`, and `self_build.py` itself. This list isn't a config
+key on purpose — if it were, the agent (or a config edit it talked you into)
+could loosen it. Changing it means editing the source by hand, outside the
+agent, same as any other hand-edit to Hermes.
+
+A self-edit takes effect only the **next time you restart Hermes** — the
+running process already has the old modules imported. Nothing here re-execs or
+auto-reloads; restart, then re-run whatever you were doing to pick it up.
+
+**Not included in the recommended 60K settings below.** Every other feature in
+this doc is reversible and scoped to a project; this one lets the agent change
+the program you're trusting to gate it. Turn it on deliberately, for a
+specific self-build session, and turn it back off when you're done — it isn't
+a "leave it on" flag.
+
+**Translating this for readers coming from another agent harness (e.g. Claude
+Code):** the concepts map over directly even though the mechanism differs —
+
+| Concept | Claude Code | Hermes |
+|---|---|---|
+| Deny beats allow | a `deny` rule in settings wins even under `bypassPermissions` | `PROTECTED` is checked before the confirm gate, unconditionally, config can't touch it |
+| Ask before acting | permission prompt per tool call | `ctx.confirm(...)` with `viewable` diff, same chokepoint as `forge_tool` |
+| Read vs. write asymmetry | `Read`/`Grep` often auto-allowed, writes gated | `list_hermes_source`/`read_hermes_source` free, `write_hermes_source`/`edit_hermes_source` always confirm |
+| "Shell workarounds bypass tool-level denies" | `cat .env` bypasses a `Read` deny rule | self-build denies a *path*, not a syntax — `local_shell cat hermes/confirm.py` still works (it's a read), but nothing in `local_shell` can make `write_hermes_source` skip the `PROTECTED` check, because the check lives outside the model's tool call entirely |
+| OS-level sandbox vs. model compliance | `/sandbox` (Seatbelt/bubblewrap) | the backup file + git checkout underneath are your OS-level undo; the `PROTECTED` list is enforcement in code the agent can't reach, not a prompt asking it to behave |
+| Model capability vs. tool permission are separate knobs | pick Opus for hard tasks, gate tools independently | pick the model at `gpu serve`; `self_build_enabled` is orthogonal — a bigger model still can't touch `PROTECTED` files |
+
 ## Static package budget (measured, 60K box)
 
 Keep an eye on the fixed block — it's sent on every single call:

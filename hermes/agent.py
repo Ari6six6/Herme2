@@ -84,6 +84,7 @@ PRODUCTIVE_TOOLS = frozenset({
     "host_write", "host_shell",
     "local_shell", "sandbox_shell", "forge_tool",
     "transfer", "replicate", "download_file",
+    "write_hermes_source", "edit_hermes_source",
 })
 
 

@@ -28,3 +28,14 @@ def is_within(base: Path, candidate: str) -> bool:
         return True
     except PathDenied:
         return False
+
+
+def repo_root() -> Path:
+    """The Hermes source tree itself (hermes/paths.py -> hermes/ -> repo root).
+
+    Used only by the self-build tools (hermes.tools.self_build), which are off
+    by default and let the agent read/edit the harness's own code. This is NOT
+    the project directory (see Project.root) — edits here only affect this
+    installation's source (an editable `pip install -e .` checkout, normally
+    the git repo)."""
+    return Path(__file__).resolve().parent.parent

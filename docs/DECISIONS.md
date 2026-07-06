@@ -218,3 +218,55 @@ and the alternative I passed on. Newest at the bottom of each feature.
   confirm regardless of domain, a new domain always confirms, and the cache is
   per-run (not persisted), so a stale approval from an earlier run can't be
   leveraged by a later prompt-injected page.
+
+## Feature 9 — Self-build
+
+- **A separate module and a separate base directory from the project tools.**
+  `read_file`/`write_file`/etc. are scoped to `Project.root` on purpose —
+  that's the directory the agent is *meant* to fill freely. Self-build is
+  scoped to `hermes.paths.repo_root()`, a different tree entirely, so the two
+  can't be confused by a path-escape bug in either: `resolve_in` still enforces
+  "stay under base," it's just a different base.
+- **A hardcoded denylist, not a config flag.** Everything else in this doc is a
+  flag precisely so it's reversible and inspectable in `config.json`. Self-build
+  protection is the one exception: if `PROTECTED` were a config key, an agent
+  that can write files and (elsewhere) talk an unattended operator into a
+  `config set` would have a path to loosen its own gate. Putting the list in
+  source, and refusing to let self-build touch that source file, closes the
+  loop — the only way to change it is a human editing Hermes by hand, which is
+  already true of every other safety-relevant constant in the codebase.
+- **What's on the denylist and why: the gates, not the surface area.**
+  `confirm.py` (the y/n chokepoint itself), `config.py` (loads `auto_confirm`/
+  `self_build_enabled`), `paths.py` (the escape check self-build itself relies
+  on), `agent.py` (the frozensets that drive checkpointing, verification, and
+  taint), `checkpoint.py`, `tools/base.py` and `tools/__init__.py` (the
+  registry), `tools/local_shell.py`, and `self_build.py` itself. Everything
+  else — tool modules, prompts, docs, tests — is editable once the operator
+  opts in. The line is drawn at "can this file change whether the agent gets
+  asked," not at "is this file important."
+- **Reuses the `forge_tool` confirm pattern (diff instead of full source).**
+  `forge_tool` already established the shape: show the operator what's about to
+  load, let them view the full body, and don't proceed without an explicit yes.
+  Self-build reuses `ctx.confirm(..., viewable=...)` the same way, but shows a
+  unified diff rather than the whole file — self-edits are usually small
+  changes to existing files, and a diff is what an operator actually needs to
+  judge one.
+- **A plain backup copy, not git, and not the project checkpoint store.**
+  Same reasoning as feature 6: boring and reliable beats clever. The project
+  checkpoint mechanism (`hermes/checkpoint.py`) is deliberately out of scope
+  here too — it snapshots `Project.root`, and self-build never touches that
+  directory. A timestamped copy in `repo_root()/.self_build_backups/` needs no
+  git binary, no repo state assumptions (an operator might have installed
+  Hermes without cloning it), and has exactly one failure mode: the disk is
+  full, which every other file write in this codebase already lives with.
+- **No auto-apply, no auto-restart.** A self-edit changes files on disk; the
+  already-imported modules in the running process are untouched until the
+  operator restarts Hermes. Making the harness restart itself mid-run to pick
+  up a change to its own control loop is exactly the kind of "let it grade its
+  own homework" move the README spends a whole section arguing against — the
+  restart stays a deliberate, visible, operator-driven step.
+- **Excluded from the recommended 60K settings.** Every other feature in that
+  list is safe to leave on. This one changes the program the operator is
+  trusting to gate everything else, so it's presented as a session you turn on
+  and back off, not a standing default — the doc says so explicitly rather than
+  leaving it to be inferred.

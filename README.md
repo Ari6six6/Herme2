@@ -70,6 +70,7 @@ config file; **full reference and recommended 60K settings in
 | **Checkpointing** | Snapshots the project before file-mutating turns; `checkpoint restore <id>` rewinds a run gone sideways. | **on** |
 | **Verification enforcement** | Bounces a finish that changed files but never *ran* anything. | off |
 | **Taint tracking** | Content pulled from the network marks the next turn untrusted — its tool calls all require your y/n, so a hostile page can't steer a privileged action. The prompt-injection rail. | **always on** |
+| **Self-build** | Lets the agent read and edit **Hermes' own source**, not just the project — gated tighter than everything else: every write asks y/n with a diff, and a fixed set of files (the gates themselves) refuse edits no matter what. | off |
 
 Every toggle is reversible and ships with silent migration — flipping one back
 gives you exactly the prior behaviour.
@@ -237,6 +238,8 @@ tiers.
 | `forge_tool` | VPS | you review the source before it loads |
 | `load_skill` / `write_skill` | VPS | free (skills on); scoped to the skills dirs |
 | `delegate` | VPS | free (delegation on); the child's tools are gated normally |
+| `list_hermes_source` / `read_hermes_source` | VPS | free — read-only, scoped to Hermes' own codebase (off unless `self_build_enabled`) |
+| `write_hermes_source` / `edit_hermes_source` | VPS | **always asks you y/n** with a diff; off unless `self_build_enabled`; a fixed denylist of safety-critical files refuses edits outright regardless |
 
 The toolbox ships ready-made tools (`download_file`, `transfer`, `replicate`,
 `todo`, `json_query`, `extract_code`, `base64_codec`) whose schemas don't bloat the

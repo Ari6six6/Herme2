@@ -240,6 +240,15 @@ def build_registry(project, cfg, confirm_fn) -> ToolRegistry:
         for t in delegate_tools.TOOLS:
             registry.register(t)
 
+    # Self-build (feature 9): read/write the Hermes codebase itself, only
+    # when the operator opts in. Gated far tighter than project file tools —
+    # see hermes/tools/self_build.py's PROTECTED denylist.
+    if cfg.get("self_build_enabled", False):
+        from hermes.tools import self_build as self_build_tools
+
+        for t in self_build_tools.TOOLS:
+            registry.register(t)
+
     # Host tools only exist when the operator has registered a server —
     # no schema bloat for setups that never use them.
     if hosts_mod.load_hosts():
