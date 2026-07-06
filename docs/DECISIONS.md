@@ -270,6 +270,25 @@ and the alternative I passed on. Newest at the bottom of each feature.
   trusting to gate everything else, so it's presented as a session you turn on
   and back off, not a standing default — the doc says so explicitly rather than
   leaving it to be inferred.
+- **Held to the same loops as project code — its own verifier, not the sandbox
+  one.** A self-edit is the highest-stakes write in the system, so it can't be
+  the *least* verified path. The run loop reaches it with the same guards it puts
+  on project code: it counts toward phantom-finish (`PRODUCTIVE_TOOLS`), it trips
+  verify-before-done (a self-edit that finishes without running anything is
+  bounced once), and — the strongest guard — an independent, skeptical pass
+  re-grades a finished self-edit. That pass is *not* the sandbox verifier: the
+  edited source lives in the checkout on the VPS, not inside the air-gapped
+  sandbox container, so a sandbox verifier would false-FAIL every time. Instead
+  `_verify_self_build` re-runs Hermes' **own test suite** on the VPS via
+  `local_shell` and returns a `VERDICT: PASS/FAIL` the self-editor can't fake —
+  a self-edit that reddens the suite is bounced back with the real failure. It
+  shares the `verify_code_runs` switch and the `verify_rounds` budget, but unlike
+  the sandbox pass it needs no sandbox, so it isn't gated on one. The self-build
+  tools stay out of `CODE_WRITE_TOOLS`/`FILE_MUTATING_TOOLS` on purpose: their
+  verification is different in kind (VPS suite, not sandbox re-run), and the
+  project-checkpoint trigger would snapshot the wrong directory — `.self_build_
+  backups` is already their revert path. None of this loosens a gate; it only
+  adds guards, and it stays off with `self_build_enabled`.
 
 ## Feature 10 — Time-boxed runs
 

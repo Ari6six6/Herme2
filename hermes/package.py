@@ -432,6 +432,36 @@ def verify_failed(report: str) -> str:
     )
 
 
+def self_build_verifier_prompt() -> str:
+    return _template("self_build_verifier.md").strip()
+
+
+def self_build_verifier_request(request: str, files: list[str]) -> str:
+    file_list = "\n".join(f"- {f}" for f in files) if files else "(none reported)"
+    return (
+        "The agent was asked:\n\n"
+        f"{request.strip()}\n\n"
+        "It edited HERMES' OWN SOURCE — these files:\n"
+        f"{file_list}\n\n"
+        "Re-run Hermes' test suite on the VPS with local_shell now "
+        "(`python -m pytest tests/ -q`), read the real result, then give your "
+        "VERDICT. The source lives on the VPS, not the sandbox."
+    )
+
+
+def self_build_verify_failed(report: str) -> str:
+    return (
+        "An INDEPENDENT verification pass re-ran Hermes' OWN test suite after "
+        "your self-edit and it did NOT pass:\n\n"
+        f"{report.strip()}\n\n"
+        "That is ground truth from the test run, not an opinion. A self-edit "
+        "that reddens Hermes' tests is not done and it overrides your own "
+        "conclusion. Read the failure, fix the source (`edit_hermes_source` / "
+        "`write_hermes_source`), re-run `python -m pytest tests/` yourself and "
+        "read the real output, and only then `finish_run`."
+    )
+
+
 def stall_nudge(repeated: bool = False) -> str:
     text = _template("stall.md").strip()
     if repeated:

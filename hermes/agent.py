@@ -26,6 +26,15 @@ MAX_CONSECUTIVE_ERRORS = 3
 # pass. (Running-only tasks like "check the logs" don't need code-verifying.)
 CODE_WRITE_TOOLS = frozenset({"write_file", "edit_file", "remote_write"})
 
+# Tools that edit HERMES' OWN SOURCE — recursive self-improvement. These are the
+# highest-stakes writes in the system (the agent changing the harness that gates
+# it), so every loop that grades ordinary code has to reach them too. They don't
+# join CODE_WRITE_TOOLS because their verification is different in kind: the edit
+# lives in the repo on the VPS, not in the air-gapped sandbox, so it's re-graded
+# by re-running Hermes' OWN test suite on the VPS (see _verify_self_build), never
+# in the sandbox container that has no copy of the source.
+SELF_BUILD_TOOLS = frozenset({"write_hermes_source", "edit_hermes_source"})
+
 # Tools that change the project directory on disk — the trigger for a checkpoint
 # (feature 6). remote_/host_ writes hit other machines, not the project, so they
 # aren't covered by a project snapshot.
@@ -225,6 +234,16 @@ def run(project, prompt, cfg, backend, gpu=None, env=None, confirm_fn=None,
         if cfg.get("verify_code_runs", True) and sandbox is not None
         else 0
     )
+    # Self-build verification: recursive self-improvement's own critic. A self-
+    # edit that tries to finish is re-graded by a fresh, skeptical pass that
+    # re-runs Hermes' OWN test suite — on the VPS, where the source and tests
+    # live, not the air-gapped sandbox. Shares the verify_code_runs switch and
+    # the verify_rounds budget; needs no sandbox, so unlike the pass above it
+    # isn't gated on one. Only ever fires when self_build_enabled put the tools
+    # in reach in the first place.
+    self_build_verify_left = (
+        cfg.get("verify_rounds", 2) if cfg.get("verify_code_runs", True) else 0
+    )
     consecutive_errors = 0
     final_text = ""
     prev_shown = ""
@@ -348,7 +367,7 @@ def run(project, prompt, cfg, backend, gpu=None, env=None, confirm_fn=None,
                     error_seen = True
                 else:
                     consecutive_errors = 0
-                    if tc.name in CODE_WRITE_TOOLS:
+                    if tc.name in CODE_WRITE_TOOLS or tc.name in SELF_BUILD_TOOLS:
                         path = _arg(tc.arguments, "path")
                         if path and path not in files_touched:
                             files_touched.append(path)
@@ -388,7 +407,7 @@ def run(project, prompt, cfg, backend, gpu=None, env=None, confirm_fn=None,
                     continue
                 if (
                     verify_before_done_left > 0
-                    and (set(tool_names_used) & FILE_MUTATING_TOOLS)
+                    and (set(tool_names_used) & (FILE_MUTATING_TOOLS | SELF_BUILD_TOOLS))
                     and not (set(tool_names_used) & EXECUTION_TOOLS)
                 ):
                     # Changed files but never ran anything — bounce once to make
@@ -457,6 +476,33 @@ def run(project, prompt, cfg, backend, gpu=None, env=None, confirm_fn=None,
                     print(green("  (antithesis could not break it — it holds against "
                                 "the twin)" if twin_sealed else
                                 "  (verification PASSED — the code actually runs)"))
+                if self_build_verify_left > 0 and (
+                    set(tool_names_used) & SELF_BUILD_TOOLS
+                ):
+                    # Recursive self-improvement doesn't get to grade its own
+                    # homework either. A fresh, skeptical pass re-runs Hermes'
+                    # OWN test suite on the VPS and returns a verdict the self-
+                    # editor can't fake — a self-edit that reddens the suite is
+                    # not done. Grades on the VPS (the source lives there), so
+                    # GPU tools are still stripped but sandbox_shell is moot.
+                    self_build_verify_left -= 1
+                    print(magenta("  (self-build verification — re-running Hermes' "
+                                  "own test suite after the self-edit)"))
+                    verify_registry = registry.without(GPU_TOOLS)
+                    passed, report = _verify_self_build(
+                        backend, verify_registry, ctx, prompt, files_touched, log,
+                        cfg.get("verify_max_turns", 6), think_re=think_re,
+                    )
+                    if not passed:
+                        ctx.finish_summary = None
+                        nudge = package.self_build_verify_failed(report)
+                        messages.append({"role": "user", "content": nudge})
+                        log({"role": "user", "content": nudge})
+                        print(red("  (self-build verification FAILED — the self-edit "
+                                  "broke Hermes' tests; back to fix it)"))
+                        continue
+                    print(green("  (self-build verification PASSED — Hermes' tests "
+                                "stay green after the self-edit)"))
                 break
             if consecutive_errors >= MAX_CONSECUTIVE_ERRORS:
                 print(yellow("  (circuit breaker: too many consecutive tool errors)"))
@@ -743,6 +789,25 @@ def _verify(backend, registry, ctx, request, files, log, max_turns,
         package.verifier_request(request, files),
         "verifier", log, max_turns, require_evidence=False,
         no_evidence_msg="", think_re=think_re,
+    )
+
+
+def _verify_self_build(backend, registry, ctx, request, files, log, max_turns,
+                       think_re=THINK_RE) -> tuple[bool, str]:
+    """Recursive self-improvement's critic: the agent just edited Hermes' OWN
+    source. Re-run Hermes' test suite on the VPS (local_shell) — the source and
+    tests live there, not in the air-gapped sandbox — and return a verdict the
+    self-editor can't fake. Fails closed, and a PASS is rejected unless the pass
+    actually RAN the suite (evidence), because author and critic share weights."""
+    return _critic_pass(
+        backend, registry, ctx,
+        package.self_build_verifier_prompt(),
+        package.self_build_verifier_request(request, files),
+        "self-build-verifier", log, max_turns, require_evidence=True,
+        no_evidence_msg=(
+            "VERDICT PASS rejected — the verifier never actually ran Hermes' "
+            "test suite, so it has no evidence the self-edit is safe. FAIL."),
+        think_re=think_re,
     )
 
 
