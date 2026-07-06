@@ -153,6 +153,20 @@ def run(project, prompt, cfg, backend, gpu=None, env=None, confirm_fn=None,
         with transcript.open("a") as f:
             f.write(json.dumps(entry, ensure_ascii=False) + "\n")
 
+    # Record EVERY y/n gate decision into the transcript, not just the screen:
+    # the action, whether it was approved, and whether auto_confirm made the
+    # call. This is the training signal for eventually teaching the model to
+    # self-gate and retire the gate for good — an auto-approval that only printed
+    # would be lost, and denials are the negative examples. Wraps whatever
+    # confirm_fn is (interactive or the auto-approver) so both modes are captured.
+    _decide = confirm_fn
+    _auto_gate = cfg.get("auto_confirm", False)
+
+    def confirm_fn(action, detail="", viewable=None):  # noqa: F811
+        approved = _decide(action, detail, viewable)
+        log({"role": "gate", "action": action, "approved": approved, "auto": _auto_gate})
+        return approved
+
     # Directive reconciliation (feature 1): before assembling, refresh the
     # distilled directives.md when it's due (migration on an old project's first
     # run, or every N runs). Off by default; a failed pass never blocks the run.
