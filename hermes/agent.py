@@ -128,6 +128,16 @@ def run(project, prompt, cfg, backend, gpu=None, env=None, confirm_fn=None,
     the VPS sandbox-host SSHEndpoint (where the runtime twin lives) or None."""
     if confirm_fn is None:
         from hermes.confirm import confirm as confirm_fn
+    # Unattended mode: with no operator watching, a y/n gate is a place the run
+    # stalls forever. `auto_confirm` approves every gated action (local_shell,
+    # state-changing web, host writes, loading a forged tool) so the agent runs
+    # end to end — trading the confirmation net for the isolation that already
+    # contains it (air-gapped sandbox, VPN killswitch). Off by default; each
+    # approval is still printed so the transcript shows what it did.
+    if cfg.get("auto_confirm", False):
+        def confirm_fn(action, detail="", viewable=None):  # noqa: F811
+            print(dim(f"  [auto-approved] {action}"))
+            return True
 
     env = env or {}
     from hermes.models import resolve as resolve_model
