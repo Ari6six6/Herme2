@@ -300,6 +300,57 @@ def test_tunnel_args_pure(home):
     assert "8000:127.0.0.1:8000" in args
     assert "ExitOnForwardFailure=yes" in args
     assert "ControlMaster=no" in args  # a tunnel must not ride the multiplexed master
+    # The long-lived tunnel detects a dead phone link faster than a one-off run.
+    assert "ServerAliveInterval=15" in args
+    assert "ServerAliveInterval=30" not in args
+
+
+def test_base_args_bounded_keepalive(home):
+    # A stalled connection must give up, not wedge the caller forever.
+    args = SSHEndpoint(host="h", port=2222).base_args()
+    assert "ServerAliveInterval=30" in args
+    assert "ServerAliveCountMax=3" in args
+
+
+def test_start_tunnel_is_self_healing(home, monkeypatch):
+    """The tunnel must be wrapped in a reconnect loop and launched in its own
+    session, so a dropped phone connection comes back on its own."""
+    captured = {}
+
+    class _FakeProc:
+        pid = 4321
+
+    def fake_popen(cmd, **kwargs):
+        captured["cmd"] = cmd
+        captured["kwargs"] = kwargs
+        return _FakeProc()
+
+    monkeypatch.setattr("hermes.ssh.subprocess.Popen", fake_popen)
+    pid = SSHEndpoint(host="h", port=2222).start_tunnel(8000, 8000)
+
+    assert pid == 4321
+    assert captured["cmd"][:2] == ["sh", "-c"]
+    script = captured["cmd"][2]
+    assert "while" in script and "8000:127.0.0.1:8000" in script
+    # Own session => own process group, so kill_pid can take down the loop
+    # *and* the ssh it spawned in one signal.
+    assert captured["kwargs"].get("start_new_session") is True
+
+
+def test_kill_pid_signals_process_group(monkeypatch):
+    from hermes.ssh import kill_pid
+
+    killed = {}
+    monkeypatch.setattr("hermes.ssh.os.killpg",
+                        lambda pid, sig: killed.setdefault("pg", pid))
+    kill_pid(4321)
+    assert killed["pg"] == 4321
+    # A zero pid is a no-op — nothing to signal.
+    killed.clear()
+    monkeypatch.setattr("hermes.ssh.os.killpg",
+                        lambda pid, sig: killed.setdefault("pg", pid))
+    kill_pid(0)
+    assert "pg" not in killed
 
 
 def test_probe_net_isolation():

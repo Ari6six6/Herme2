@@ -80,7 +80,12 @@ class SSHEndpoint:
             "-o", "ControlMaster=auto",
             "-o", f"ControlPath={sockets}/%r@%h-%p",
             "-o", "ControlPersist=600",
+            # Phone links flap and sit behind aggressive NAT idle timeouts.
+            # A 30s keepalive punches through the NAT; giving up after 3
+            # missed replies (~90s) means a truly dead peer is detected and
+            # the ssh process exits instead of wedging the caller forever.
             "-o", "ServerAliveInterval=30",
+            "-o", "ServerAliveCountMax=3",
             "-o", "StrictHostKeyChecking=accept-new",
             "-o", "ConnectTimeout=15",
             f"{self.user}@{self.host}",
@@ -151,6 +156,11 @@ class SSHEndpoint:
         args = self.base_args()
         # A tunnel should be its own connection, not the multiplexed master.
         args[args.index("ControlMaster=auto")] = "ControlMaster=no"
+        # This is the long-lived link that carries every inference request,
+        # so notice a dead phone connection faster than the default 90s
+        # (15s x 3 = ~45s) — that's how quickly the reconnect loop below can
+        # bring it back after a handoff or a dropped session.
+        args[args.index("ServerAliveInterval=30")] = "ServerAliveInterval=15"
         return args[:1] + [
             "-N",
             "-L", f"{local_port}:127.0.0.1:{remote_port}",
@@ -158,8 +168,24 @@ class SSHEndpoint:
         ] + args[1:]
 
     def start_tunnel(self, local_port: int, remote_port: int) -> int:
+        """Launch a *self-healing* tunnel: a shell loop that re-establishes
+        the `ssh -L` forward whenever it drops. Phone connections flap
+        constantly — wifi<->cellular handoffs, NAT idle timeouts, the radio
+        sleeping — and a bare `ssh -N -L` dies on the first flap and stays
+        dead until something happens to notice. The loop brings it straight
+        back within a couple of seconds, so a dropped session is a blip
+        instead of an outage you have to fix by hand.
+
+        Returns the pid of the loop (a process-group leader thanks to
+        start_new_session); kill_pid signals the whole group so the wrapped
+        ssh dies with it."""
+        inner = " ".join(shlex.quote(a) for a in self.tunnel_args(local_port, remote_port))
+        # `sleep 2` between attempts keeps a permanently-refused forward
+        # (e.g. the box is down, or the local port is momentarily still held
+        # by the previous ssh during a flap) from spinning hot.
+        loop = f"while :; do {inner}; sleep 2; done"
         proc = subprocess.Popen(
-            self.tunnel_args(local_port, remote_port),
+            ["sh", "-c", loop],
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
             start_new_session=True,
@@ -190,7 +216,19 @@ def pid_alive(pid: int) -> bool:
 
 
 def kill_pid(pid: int) -> None:
+    """Take down a tunnel. The tunnel is a self-healing loop running in its
+    own session (see start_tunnel), so its pid leads a process group —
+    signal the whole group to kill the loop *and* the ssh it spawned,
+    otherwise the loop just reconnects the ssh we tried to stop. Fall back
+    to the bare pid if the group is already gone."""
+    if not pid:
+        return
     try:
-        os.kill(pid, signal.SIGTERM)
+        os.killpg(pid, signal.SIGTERM)
     except (ProcessLookupError, PermissionError):
         pass
+    except OSError:
+        try:
+            os.kill(pid, signal.SIGTERM)
+        except (ProcessLookupError, PermissionError):
+            pass
