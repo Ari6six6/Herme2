@@ -97,6 +97,7 @@ class Project:
     # -- lifecycle ---------------------------------------------------------
     @staticmethod
     def create(projects_dir: Path, name: str) -> "Project":
+        name = str(name)  # a numeric-looking name may arrive already coerced to int
         if not _NAME_RE.match(name):
             raise ProjectError(
                 "project names: letters, digits, '-' and '_' only (max 40 chars)"
@@ -110,7 +111,7 @@ class Project:
 
     @staticmethod
     def load(projects_dir: Path, name: str) -> "Project":
-        root = projects_dir / name
+        root = projects_dir / str(name)  # tolerate an int from a coerced config value
         if not root.is_dir():
             raise ProjectError(f"no such project: {name}")
         p = Project(root)
