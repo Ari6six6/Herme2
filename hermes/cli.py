@@ -168,11 +168,24 @@ def cmd_run(cfg, args: str) -> None:
     # `run build` is the refinement loop: reopen the twin and run a recon/build
     # pass that diffs the reconstruction against the live target and closes the
     # gap. Each invocation is another pass.
-    if prompt.lower() == "build":
+    build_words = prompt.split()
+    if build_words and build_words[0].lower() == "build":
         twin = project.twin()
-        if not twin.exists():
-            print(yellow("not a build project") + dim(" — `project build <name> <url>` first"))
+        url = build_words[1] if len(build_words) > 1 else ""
+        if url and not url.startswith(("http://", "https://")):
+            print(red("usage: run build [http(s)-url]"))
             return
+        if not twin.exists():
+            if not url:
+                print(yellow("this project has no target yet")
+                      + dim(" — `run build <url>` (or `build init <url>`) to point it at one."))
+                return
+            print(dim(f"no twin yet — attaching {url} first ..."))
+            report = _attach_target(cfg, project, url)
+            print(green(f"target attached — {report.get('exchanges', 0)} response(s) recorded."))
+        elif url:
+            print(dim("this project already has a target; running a refinement pass "
+                      "(use `build clone` to re-seed from a URL)."))
         if twin.is_sealed():
             twin.unseal()
             print(dim("reopened the twin for a refinement pass."))
@@ -212,13 +225,7 @@ def cmd_project(cfg, args: str) -> None:
             return
         cfg.set("current_project", name)
         cfg.save()
-        twin = project.twin()
-        twin.init(source=url, mode="url")
-        # The builder needs to move files VPS<->box and pull FOSS on the VPS;
-        # equip those up front so it isn't stuck fumbling for them.
-        for t in ("download_file", "transfer"):
-            project.equip_tool(t)
-        report = _clone_target(cfg, twin, url, seal=False)
+        report = _attach_target(cfg, project, url)
         print(green(f"build project '{name}' created — "
                     f"{report.get('exchanges', 0)} response(s) recorded, "
                     f"stack fingerprinted (open)."))
@@ -557,6 +564,21 @@ def _clone_target(cfg, twin, url: str, seal: bool = False) -> dict:
     return report
 
 
+def _attach_target(cfg, project, url: str) -> dict:
+    """Point a project at a target: init its twin, equip the file-moving tools
+    the builder needs, and record ground-truth responses. Shared by
+    `project build` (brand-new project) and `build init` / `run build <url>`
+    (attach a target to any existing project), so no project is a second-class
+    citizen that can never do twin work."""
+    twin = project.twin()
+    twin.init(source=url, mode="url")
+    # The builder needs to move files VPS<->box and pull FOSS on the VPS;
+    # equip those up front so it isn't stuck fumbling for them.
+    for t in ("download_file", "transfer"):
+        project.equip_tool(t)
+    return _clone_target(cfg, twin, url, seal=False)
+
+
 def cmd_build(cfg, args: str) -> None:
     """The runtime twin: clone a target into a faithful, safe local copy the
     agent builds against — never the live service."""
@@ -568,6 +590,22 @@ def cmd_build(cfg, args: str) -> None:
     sub = parts[0] if parts else "show"
     rest = parts[1].strip() if len(parts) > 1 else ""
     twin = project.twin()
+
+    if sub == "init":  # attach a target to THIS project — any project can build
+        url = rest.split()[0] if rest else ""
+        if not url.startswith(("http://", "https://")):
+            print(red("usage: build init <http(s)-url>"))
+            return
+        if twin.exists():
+            print(yellow("this project already has a target")
+                  + dim(" — `build clone` re-seeds it, `build show` inspects it."))
+            return
+        report = _attach_target(cfg, project, url)
+        print(green(f"target attached — {report.get('exchanges', 0)} response(s) "
+                    f"recorded, stack fingerprinted (open)."))
+        print(dim("Set the task with `mission edit`, then `run build` to reconstruct "
+                  "the twin (each run is another pass)."))
+        return
 
     if sub == "win":
         if not twin.exists():
