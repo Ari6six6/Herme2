@@ -288,6 +288,7 @@ Handy commands as you go:
 | Symptom | Fix |
 |---|---|
 | `vLLM endpoint not reachable` | `gpu status`; if the tunnel is dead, `gpu tunnel`; if the model isn't up, re-`gpu serve`. |
+| Tunnel/endpoint dies every time your phone's SSH session drops, but `nvidia-smi` on the GPU box still shows the model loaded | Your VPS's `systemd-logind` likely has `KillUserProcesses=yes` (the cloud-image default), which kills every process your login owns — including the detached tunnel — the moment that login ends. `setup.sh` now runs `loginctl enable-linger <you>` to fix this; if you provisioned before that existed, run it yourself once: `sudo loginctl enable-linger $(whoami)`. |
 | `no GPU box attached` | `gpu attach` (then `gpu serve`). |
 | Hermes's outbound hangs | If you set up the VPN, the killswitch blocks egress when the tunnel is down — `wg-quick up wg0`. |
 | A run went wrong | `checkpoint` to list, `checkpoint restore <id>` to rewind the project files. |

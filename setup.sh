@@ -217,6 +217,17 @@ else
   rm -f /etc/ssh/sshd_config.d/99-hermes.conf
 fi
 
+# --- 5f. linger: keep the GPU tunnel alive when the phone's SSH drops -----
+# Most cloud images ship logind's KillUserProcesses=yes, which SIGKILLs every
+# process a login session owns — including detached/setsid'd background jobs
+# like the hermes<->GPU-box SSH tunnel — the instant that login ends (dropped
+# wifi, backgrounded Termux, a lock screen). `enable-linger` keeps INVOKER's
+# systemd user instance (and anything running under it) alive independent of
+# any active login, so a flaky phone connection doesn't kill the tunnel.
+loginctl enable-linger "$INVOKER" 2>/dev/null \
+  && ok "linger enabled for $INVOKER (GPU tunnel survives a dropped phone session)" \
+  || warn "could not enable linger for $INVOKER — a dropped SSH session may kill the GPU tunnel (run: loginctl enable-linger $INVOKER)"
+
 # ===========================================================================
 # 6. WireGuard killswitch
 # ===========================================================================
