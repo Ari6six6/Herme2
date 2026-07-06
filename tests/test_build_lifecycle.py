@@ -17,6 +17,27 @@ def _run(project, cfg, prompt, script, sandbox):
                          confirm_fn=yes)
 
 
+def test_attach_target_makes_any_project_build_capable(project, cfg, monkeypatch):
+    # A plain `project new` project starts with no twin. `_attach_target` (behind
+    # `build init <url>` / `run build <url>`) points it at a target, so build/twin
+    # work is no longer locked to projects created with `project build`.
+    from hermes import cli
+
+    # Tests have no network — stub the clone/fingerprint step.
+    monkeypatch.setattr(cli, "_clone_target",
+                        lambda cfg, twin, url, seal=False: {"exchanges": 2})
+    assert not project.twin().exists()
+
+    report = cli._attach_target(cfg, project, "https://api.example.com")
+
+    twin = project.twin()
+    assert twin.exists()                          # now a build-capable project
+    assert twin.source == "https://api.example.com"
+    assert report["exchanges"] == 2
+    # The file-moving tools the builder needs were equipped up front.
+    assert {"download_file", "transfer"} <= set(project.equipped_tools())
+
+
 def test_recon_to_build_full_lifecycle(project, cfg):
     twin = project.twin()
     twin.init(source="https://api.example.com", mode="url",
