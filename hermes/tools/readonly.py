@@ -1,6 +1,6 @@
 """Fail-closed read-only classifier for commands on managed hosts.
 
-Opposite polarity to the GPU sandbox's deny-list: a command runs without
+Opposite polarity to the GPU box's egress deny-list: a command runs without
 confirmation ONLY if every part of it is positively recognized as read-only.
 Anything the parser cannot vouch for — unknown binaries, redirections,
 command substitution, unparseable quoting — goes to the operator.

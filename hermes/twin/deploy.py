@@ -2,12 +2,12 @@
 reconstructed software.
 
 `build serve` stands the twin up inside a **container** on the VPS sandbox host,
-listening on `127.0.0.1:<port>` of the VPS (then tunneled to the phone), so the
-solution the agent writes — and its tests — hit a faithful, *isolated*, live clone
-of the target instead of the real service.
+listening on `127.0.0.1:<port>` of the VPS, so the solution the agent writes —
+and its tests — hit a faithful, *isolated*, live clone of the target instead of
+the real service.
 
 The twin is the **real software**, reconstructed from a blueprint that lives on the
-phone: the project's `twin/recipe.jsonl` (the ordered, captured reconstruction
+VPS: the project's `twin/recipe.jsonl` (the ordered, captured reconstruction
 steps) plus the recon manifest. `build serve` boots a fresh container from a base
 image and replays the recipe steps *inside it* (each step is a `docker exec`), so
 the whole stack — packages, runtime, app — is installed and launched in a
@@ -33,7 +33,7 @@ DEFAULT_BASE_IMAGE = "ubuntu:22.04"
 
 
 def serve_log_path(model: TwinModel) -> Path:
-    """Where the last `build serve` transcript is written, on the phone — so a
+    """Where the last `build serve` transcript is written, on the VPS — so a
     failed respin is debuggable without the box."""
     return model.root / "serve.log"
 
@@ -161,7 +161,7 @@ def deploy(ep, model: TwinModel, port: int, on_event=None,
 def _serve_container(ep, model, port, recipe, emit, step_timeout, clean,
                      base_image, runtime, log_path) -> dict:
     """Boot a fresh container and replay the captured reconstruction steps inside
-    it, with a transcript written to the phone for debugging."""
+    it, with a transcript written to the VPS for debugging."""
     name = container_name(model)
     transcript: list[str] = []
 

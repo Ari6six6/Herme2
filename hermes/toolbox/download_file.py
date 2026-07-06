@@ -1,11 +1,11 @@
-"""Toolbox: download a file from the web ON THE PHONE into the workspace."""
+"""Toolbox: download a file from the web ON THE VPS into the workspace."""
 
 import httpx
 
 TOOL = {
     "name": "download_file",
     "description": (
-        "Download a URL (from the phone — the only place with internet) into "
+        "Download a URL (from the VPS — the only place with internet) into "
         "the project workspace. Binary-safe. Max 100MB."
     ),
     "parameters": {

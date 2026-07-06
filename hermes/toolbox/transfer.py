@@ -1,15 +1,15 @@
-"""Toolbox: move files between the phone project and the GPU box (binary-safe).
+"""Toolbox: move files between the VPS project and the GPU box (binary-safe).
 
-This is THE bridge for the no-internet-on-GPU rule: download on the phone,
+This is THE bridge for the no-internet-on-GPU rule: download on the VPS,
 push to the box; compute on the box, pull results back. Bytes are streamed
-over the SSH connection — no base64 inflation, nothing buffered in phone RAM.
+over the SSH connection — no base64 inflation, nothing buffered in VPS RAM.
 """
 
 TOOL = {
     "name": "transfer",
     "description": (
-        "Copy a file between the phone project and the GPU box. "
-        "direction 'push' = phone->box, 'pull' = box->phone. Binary-safe."
+        "Copy a file between the VPS project and the GPU box. "
+        "direction 'push' = VPS->box, 'pull' = box->VPS. Binary-safe."
     ),
     "parameters": {
         "type": "object",

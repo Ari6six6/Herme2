@@ -1,9 +1,10 @@
-"""Toolbox: clone files from a managed host into the GPU sandbox.
+"""Toolbox: clone files from a managed host into the GPU box workspace.
 
-The safe-experimentation path: pull the broken thing off the real server,
-rebuild it on the disposable GPU box, iterate freely there, then apply the
-verified fix back with host_write / host_shell. The phone relays the bytes —
-the GPU box never gets a network path to your servers.
+For the opt-in on-card path (needs the GPU shell): pull the broken thing off the
+real server, rebuild it on the disposable GPU box, iterate freely there, then
+apply the verified fix back with host_write / host_shell. The VPS relays the
+bytes — the GPU box never gets a network path to your servers. (For routine work
+you don't need the card, experiment in the air-gapped VPS sandbox instead.)
 """
 
 import shlex
@@ -17,8 +18,8 @@ TOOL = {
     "name": "replicate",
     "description": (
         "Copy a file or directory FROM a managed host INTO the GPU box "
-        "workspace (relayed through the phone) so you can experiment on a "
-        "copy instead of the live server. Reads on the host are free. "
+        "workspace (relayed through the VPS; needs the GPU shell on) so you can "
+        "experiment on a copy instead of the live server. Reads on the host are free. "
         "Max 200MB; directories skip .git/node_modules/__pycache__/.venv "
         "unless you pass excludes=[]"
     ),

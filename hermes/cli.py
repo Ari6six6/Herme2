@@ -214,7 +214,7 @@ def cmd_project(cfg, args: str) -> None:
         cfg.save()
         twin = project.twin()
         twin.init(source=url, mode="url")
-        # The builder needs to move files phone<->box and pull FOSS on the phone;
+        # The builder needs to move files VPS<->box and pull FOSS on the VPS;
         # equip those up front so it isn't stuck fumbling for them.
         for t in ("download_file", "transfer"):
             project.equip_tool(t)

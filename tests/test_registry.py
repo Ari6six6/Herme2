@@ -124,7 +124,7 @@ def test_equip_library_tool(project, cfg, yes):
 def test_remote_network_guard(project, cfg, yes):
     from hermes.tools.remote import EGRESS_RE, PROVISION_RE
 
-    # Raw egress / transfer / probe -> bounced to the phone.
+    # Raw egress / transfer / probe -> bounced to the VPS.
     egress = [
         "curl https://x.com",
         "wget http://x",

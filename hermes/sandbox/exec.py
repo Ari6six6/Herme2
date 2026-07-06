@@ -9,7 +9,7 @@ The container is `--network none`: the base image is pulled with the VPS's own
 egress (the daemon pulls over the host, before the container exists), but once it
 is running it has no interface at all, so nothing the agent executes can phone
 out. That is the air-gap — enforced by the kernel, not a deny-list. The project
-workspace is bind-mounted at /workspace so files the agent wrote on the phone are
+workspace is bind-mounted at /workspace so files the agent wrote on the VPS are
 there to run, and results land back in the same workspace with no transfer step.
 """
 
