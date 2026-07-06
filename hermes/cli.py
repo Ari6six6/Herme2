@@ -339,7 +339,7 @@ def cmd_gpu(cfg, args: str) -> None:
             return
         _ensure_tunnel(cfg, state)
         print(dim(f"waiting for the model to come up ({spec.weights_note})..."))
-        if provision.wait_ready(ep, cfg):
+        if provision.wait_ready(ep, cfg, spec):
             state["served_ctx"] = plan.max_model_len
             save_gpu_state(state)
             print(green(f"ready — {spec.label} is listening (context {plan.max_model_len}).")

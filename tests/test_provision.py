@@ -1,5 +1,6 @@
 import pytest
 
+import hermes.gpu.provision as provision
 from hermes.gpu.provision import (
     LLAMA_BIN,
     MODEL_MAX_LEN,
@@ -10,8 +11,10 @@ from hermes.gpu.provision import (
     llama_command,
     plan_serve,
     vllm_command,
+    wait_ready,
 )
 from hermes.gpu.ssh import SSHEndpoint, SSHError, parse_ssh_string
+from hermes.models import get_spec
 
 
 def test_tier_h200(cfg):
@@ -189,6 +192,96 @@ def test_qwen_40b_resolves_gguf_by_quant_tag(cfg):
     assert "--hf-file" not in cmd
     assert "--alias qwen3.6-40b" in cmd
     assert "--jinja" in cmd
+
+
+def test_weights_total_parsed_from_note():
+    # The denominator for the download bar comes from each model's own note.
+    assert provision._weights_total_bytes(get_spec("qwen")) == 19_000_000_000
+    assert provision._weights_total_bytes(get_spec("hermes")) == 37_000_000_000
+    # No parseable size → no percentage rather than a made-up one.
+    from hermes.models import ModelSpec
+
+    bare = ModelSpec(
+        key="x", label="x", repo="x", identity="x", min_total_gb=1,
+        max_model_len=1, context_tiers=[], context_beyond=1,
+        weights_note="downloads some weights", served_name="x",
+    )
+    assert provision._weights_total_bytes(bare) is None
+
+
+def test_fmt_size_switches_gb_to_mb():
+    assert provision._fmt_size(4_700_000_000) == "4.7 GB"
+    assert provision._fmt_size(312_000_000) == "312 MB"
+
+
+def test_cache_bytes_sums_both_caches():
+    from conftest import FakeEndpoint
+
+    ep = FakeEndpoint([(0, "20401094656\n", "")])
+    assert provision._cache_bytes(ep) == 20401094656
+    assert "du -sb" in ep.calls[0] and ".cache/llama.cpp" in ep.calls[0]
+    # A failed probe never aborts the wait — it just yields None this tick.
+    assert provision._cache_bytes(FakeEndpoint([(1, "", "no such dir")])) is None
+    assert provision._cache_bytes(FakeEndpoint([(0, "garbage", "")])) is None
+
+
+class _DownloadThenReady:
+    """Endpoint whose cache grows ~2GB per du probe; the /v1/models endpoint
+    stays down until `ready_after` httpx polls, so the wait spans a real
+    download phase before coming up."""
+
+    def __init__(self, steps):
+        self.remote_workspace = "~/hermes-workspace"
+        self.calls: list[str] = []
+        self._steps = iter(steps)
+        self._bytes = 0
+
+    def run(self, command, timeout=120, stdin=None):
+        self.calls.append(command)
+        if "du -sb" in command:
+            self._bytes = next(self._steps, self._bytes)
+            return 0, str(self._bytes), ""
+        if "tail -c" in command:
+            return 0, "warming up the model with an empty run", ""
+        return 0, "", ""
+
+
+def test_wait_ready_reports_download_progress(cfg, monkeypatch, capsys):
+    monkeypatch.setattr(provision.time, "sleep", lambda _s: None)
+    monkeypatch.setattr(provision.ui, "ENABLED", False)  # deterministic full lines
+
+    # Endpoint comes up on the 4th /v1/models poll; cache grows meanwhile.
+    calls = {"n": 0}
+
+    class _Resp:
+        status_code = 200
+
+    def fake_get(url, timeout=5):
+        calls["n"] += 1
+        if calls["n"] < 4:
+            raise provision.httpx.ConnectError("down")
+        return _Resp()
+
+    monkeypatch.setattr(provision.httpx, "get", fake_get)
+    ep = _DownloadThenReady(steps=[2_000_000_000, 4_000_000_000, 6_000_000_000])
+
+    assert wait_ready(ep, cfg, get_spec("qwen"), deadline_s=30) is True
+    out = capsys.readouterr().out
+    assert "downloading" in out
+    assert "/ ~19.0 GB" in out          # denominator from the model's note
+    assert "%" in out and "MB/s" in out  # progress and a live rate
+
+
+def test_wait_ready_times_out_without_hanging(cfg, monkeypatch):
+    monkeypatch.setattr(provision.time, "sleep", lambda _s: None)
+
+    def always_down(url, timeout=5):
+        raise provision.httpx.ConnectError("down")
+
+    monkeypatch.setattr(provision.httpx, "get", always_down)
+    ep = _DownloadThenReady(steps=[1_000_000_000])
+    # A zero-length deadline returns False immediately rather than looping.
+    assert wait_ready(ep, cfg, get_spec("qwen"), deadline_s=0) is False
 
 
 def test_parse_ssh_strings():
