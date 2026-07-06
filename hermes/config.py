@@ -24,6 +24,14 @@ DEFAULTS: dict = {
     "current_project": "",
     "sampling": {"temperature": 0.6, "top_p": 0.95, "top_k": 20},
     "max_turns": 40,
+    "max_run_seconds": 0,  # 0 = no wall-clock cap. A hard stop this many seconds
+                           # into a run, independent of max_turns — the safety net
+                           # that still bounds a run if max_turns is raised or the
+                           # model is slow, so "turn cap" and "time cap" are two
+                           # separate, composable limits rather than one.
+    "delegate_max_seconds": 0,  # same idea, scoped to one delegated child call —
+                                # a stuck or slow-going child gets reaped and
+                                # returns a partial result instead of hanging.
     "stall_nudges": 2,  # bounce prose-only turns back N times before accepting them as final
     "phantom_nudges": 1,  # bounce a finish that pasted code but wrote/ran nothing
     "build_proof_nudges": 1,  # in build mode, bounce a finish that never checked the twin

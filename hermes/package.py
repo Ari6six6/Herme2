@@ -309,6 +309,10 @@ def wrapup_warning() -> str:
     return _template("wrapup.md").strip()
 
 
+def time_wrapup_warning() -> str:
+    return _template("time_wrapup.md").strip()
+
+
 def phantom_nudge() -> str:
     return _template("phantom.md").strip()
 

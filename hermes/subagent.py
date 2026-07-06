@@ -16,6 +16,8 @@ permissions than its parent. Recursion depth is capped (default 1).
 
 from __future__ import annotations
 
+import time
+
 from hermes import package
 from hermes.llm import LLMTransportError
 from hermes.tools import ToolRegistry
@@ -64,6 +66,11 @@ def run_child(parent_ctx: ToolContext, brief: str, allowed_tools, cfg,
     depth = (parent_ctx.depth or 0) + 1
     max_depth = int(cfg.get("delegate_max_depth", 1))
     max_turns = max(1, int(cfg.get("delegate_max_turns", 20)))
+    # Wall-clock reaper: a child that's stuck or just going slowly (rather than
+    # burning turns) still gets cut off and returns a partial result instead of
+    # running unsupervised for however long the backend takes. 0 = no cap.
+    max_seconds = int(cfg.get("delegate_max_seconds", 0))
+    started = time.monotonic()
 
     child_reg = _child_registry(parent_ctx, allowed_tools, depth, max_depth, cfg)
     child_ctx = ToolContext(
@@ -85,6 +92,9 @@ def run_child(parent_ctx: ToolContext, brief: str, allowed_tools, cfg,
     tool_names: list[str] = []
     last_text = ""
     for _ in range(max_turns):
+        if max_seconds and (time.monotonic() - started) >= max_seconds:
+            return _cap_out(last_text, tool_names, max_turns,
+                            f"wall-clock budget {max_seconds}s reached")
         try:
             result = backend.chat(msgs, tools=child_reg.schemas())
         except LLMTransportError:

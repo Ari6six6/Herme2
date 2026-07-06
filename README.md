@@ -71,6 +71,7 @@ config file; **full reference and recommended 60K settings in
 | **Verification enforcement** | Bounces a finish that changed files but never *ran* anything. | off |
 | **Taint tracking** | Content pulled from the network marks the next turn untrusted — its tool calls all require your y/n, so a hostile page can't steer a privileged action. The prompt-injection rail. | **always on** |
 | **Self-build** | Lets the agent read and edit **Hermes' own source**, not just the project — gated tighter than everything else: every write asks y/n with a diff, and a fixed set of files (the gates themselves) refuse edits no matter what. | off |
+| **Time-boxed runs** | A wall-clock hard stop (`max_run_seconds`), independent of the turn count — the safety net that still bounds a run when `max_turns` is raised or removed for autopilot use. `delegate_max_seconds` does the same for one delegated child. | off |
 
 Every toggle is reversible and ships with silent migration — flipping one back
 gives you exactly the prior behaviour.

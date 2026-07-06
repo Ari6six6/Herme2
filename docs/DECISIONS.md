@@ -270,3 +270,43 @@ and the alternative I passed on. Newest at the bottom of each feature.
   trusting to gate everything else, so it's presented as a session you turn on
   and back off, not a standing default — the doc says so explicitly rather than
   leaving it to be inferred.
+
+## Feature 10 — Time-boxed runs
+
+- **A second axis, not a replacement for `max_turns`.** Turns and seconds
+  measure different failure modes: a run that loops on a cheap, fast model can
+  burn through 40 turns in under a minute (turns are the real limit); a run on
+  a slow backend or a single turn stuck on a huge tool result can spend minutes
+  on ONE turn (time is the real limit). Picking one axis to represent both
+  would under-protect one of the two cases, so both caps exist and a run stops
+  at whichever fires first.
+- **`0` means off, same idiom as `max_model_len`.** Every other numeric safety
+  knob in this codebase is a flag with a meaningful default; this one defaults
+  to off because "how long is too long" depends entirely on what you're paying
+  for compute and what the task is — there's no honest universal default the
+  way `checkpointing: true` has one.
+- **Checked at the top of the turn loop, not wrapped around `backend.chat`.**
+  Killing a run mid-request would either need to cancel an in-flight HTTP call
+  (backend-specific, fragile) or let it finish anyway (the timeout does
+  nothing). Checking once per turn, before starting the next one, means the
+  cap's granularity is "one more turn's worth of overshoot," which is fine —
+  the goal is bounding a runaway *loop*, not preempting a single slow call.
+- **One wrap-up nudge at 85%, not a countdown.** Mirrors the existing
+  `turns == max_turns - 2` warning exactly, including reusing the same
+  "wrap up, leave precise open items" wording (in a new `time_wrapup.md`
+  template rather than the turn-worded `wrapup.md` — "2 turns remain" would be
+  a lie in a time-based stop). A single nudge, deduped with a boolean flag, so
+  a long-running compaction pass or a slow individual turn can't retrigger it.
+- **A time-capped run still gets a real summary, not a stub.** The hard stop
+  sets `aborted = True` and breaks the loop exactly like exhausting
+  `max_turns` does; the existing post-loop logic (force a real handoff summary
+  from the model, falling back to `_stub_summary` only if that also fails)
+  already handles "aborted" uniformly, so no special-casing was needed here —
+  the time cap is just another way to reach the same aborted state the turn
+  cap already produces.
+- **`delegate_max_seconds` lives beside `delegate_max_turns`, checked before
+  each child turn.** Same reasoning as the parent loop, and the same
+  `_cap_out` structured-partial return path other delegate stop conditions
+  already use — a reaped child is indistinguishable, from the parent's point
+  of view, from one that ran out of turns: both hand back "how far it got,"
+  never a hang or an empty string.

@@ -199,6 +199,13 @@ def run(project, prompt, cfg, backend, gpu=None, env=None, confirm_fn=None,
     ctx._delegate_log = log  # child steps land in the same transcript
 
     max_turns = cfg.get("max_turns", 20)
+    # Time-boxed runs: a wall-clock budget independent of the turn count. Off
+    # by default (0). Composes with max_turns rather than replacing it — raising
+    # or removing the turn cap for an unattended/autopilot run still leaves this
+    # as the backstop that actually bounds wall-clock time.
+    max_run_seconds = cfg.get("max_run_seconds", 0)
+    run_started = time.monotonic()
+    time_wrapup_sent = False
     nudges_left = cfg.get("stall_nudges", 2)
     phantom_nudges_left = cfg.get("phantom_nudges", 1)
     # Build mode = this project has a sealed twin to prove work against.
@@ -247,6 +254,18 @@ def run(project, prompt, cfg, backend, gpu=None, env=None, confirm_fn=None,
 
     try:
         for turns in range(1, max_turns + 1):
+            elapsed = time.monotonic() - run_started
+            if max_run_seconds and elapsed >= max_run_seconds:
+                print(yellow(f"  (wall-clock budget {max_run_seconds}s reached)"))
+                aborted = True
+                break
+            if (max_run_seconds and not time_wrapup_sent
+                    and elapsed >= max_run_seconds * 0.85):
+                time_wrapup_sent = True
+                warn = package.time_wrapup_warning()
+                messages.append({"role": "user", "content": warn})
+                log({"role": "user", "content": warn})
+                print(yellow("  (85% of the time budget used — telling the model to wrap up)"))
             if compaction.maybe_compact(
                 messages, stable_prefix, backend, cfg, context_window,
                 schema_chars, think_re=think_re, log=log,

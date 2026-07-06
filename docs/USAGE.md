@@ -299,6 +299,42 @@ Code):** the concepts map over directly even though the mechanism differs —
 | OS-level sandbox vs. model compliance | `/sandbox` (Seatbelt/bubblewrap) | the backup file + git checkout underneath are your OS-level undo; the `PROTECTED` list is enforcement in code the agent can't reach, not a prompt asking it to behave |
 | Model capability vs. tool permission are separate knobs | pick Opus for hard tasks, gate tools independently | pick the model at `gpu serve`; `self_build_enabled` is orthogonal — a bigger model still can't touch `PROTECTED` files |
 
+### Feature 10 — Time-boxed runs (wall-clock safety net)
+
+`max_turns` bounds a run by tool-call count. It does **not** bound wall-clock
+time: a slow model, a big context, or just a task that keeps finding more to do
+can turn "40 turns" into a long time with nobody watching. This feature adds a
+second, independent limit measured in seconds, so raising or removing the turn
+cap for an unattended/autopilot run doesn't mean truly unbounded execution.
+
+| Flag | Default | Effect |
+|---|---|---|
+| `max_run_seconds` | `0` (off) | hard-stop the run once this many seconds have elapsed, whatever `max_turns` says |
+| `delegate_max_seconds` | `0` (off) | same idea, scoped to one `delegate` child call |
+
+At 85% of `max_run_seconds`, the run gets one wrap-up nudge (same shape as the
+turn-based "2 turns left" warning, worded for time instead) so the model has a
+chance to land cleanly instead of getting cut off mid-thought. Past 100% it
+hard-stops exactly like exhausting `max_turns`: the run is marked aborted, and
+the harness still asks the model for a real handoff summary before writing
+`summary.md` — an interrupted run still leaves your next run something to
+pick up.
+
+`delegate_max_seconds` is the one that matters most once delegation is on: a
+child that hangs or just goes slowly is not bounded by `delegate_max_turns` if
+each individual turn takes a long time. Hitting the time cap returns the same
+structured partial (`[sub-agent stopped: wall-clock budget Ns reached]`,
+tools used, how far it got) that hitting the turn cap does — the parent always
+gets something to act on, never a silent hang.
+
+**These two caps compose, they don't replace each other.** A run stops at
+whichever limit it hits first. If you're running with `auto_confirm true` on a
+rented GPU and want to raise `max_turns` well past the default so the agent
+doesn't get cut off mid-task, set `max_run_seconds` (and, if delegation is on,
+`delegate_max_seconds`) to an actual number first — turn count alone stops
+meaning much once turns are cheap and the model is fast; time is what's
+actually metered on the box you're renting.
+
 ## Static package budget (measured, 60K box)
 
 Keep an eye on the fixed block — it's sent on every single call:
