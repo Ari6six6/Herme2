@@ -7,8 +7,6 @@ from hermes.llm import ChatResult, MockBackend, ToolCall
 
 
 def run_agent(project, cfg, script, confirm=None):
-    cfg.set("plan_build_tasks", False)
-    cfg.set("referee_on_deadlock", False)
     backend = MockBackend(script)
     return agent.run(
         project, "do the thing", cfg, backend,

@@ -110,7 +110,7 @@ and the alternative I passed on. Newest at the bottom of each feature.
   and the child-registry builder). Belt and suspenders: even if one path is
   bypassed, the other blocks a grandchild at the default cap of 1.
 - **The child loop is a separate, smaller function, not `agent.run`.** `run` does
-  package assembly, history append, run-dir writes, planner/verifier passes — all
+  package assembly, history append, run-dir writes, verifier passes — all
   wrong for a stateless child. The child loop (`subagent.run_child`) reuses the
   shared helpers (`_assistant_msg`, `strip_think`, `dispatch`) but stays minimal.
   This is the "existing loop invoked recursively" in spirit without dragging the

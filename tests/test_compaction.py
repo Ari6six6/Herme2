@@ -166,7 +166,6 @@ def test_agent_loop_compacts_once_and_finishes(project, cfg):
     cfg.set("compaction_trigger_frac", 0.5)
     cfg.set("compaction_keep_last_turns", 4)
     cfg.set("max_turns", 40)
-    cfg.set("plan_build_tasks", False)
     result = agent.run(
         project, "long task", cfg, LongRunBackend(),
         gpu=None, env={"context_window": 8000}, confirm_fn=lambda *a, **k: True,

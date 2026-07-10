@@ -148,7 +148,6 @@ class ParentWithDelegate:
 
 def test_parent_context_grows_by_only_brief_and_summary(project, cfg):
     cfg.set("delegate_enabled", True)
-    cfg.set("plan_build_tasks", False)
     result = agent.run(project, "do it", cfg, ParentWithDelegate(),
                        gpu=None, env={}, confirm_fn=lambda *a, **k: True)
     assert not result.aborted

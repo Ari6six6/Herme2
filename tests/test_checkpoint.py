@@ -24,14 +24,11 @@ def test_restore_unknown_id_returns_false(project):
     assert not checkpoint.restore(project, "nope")
 
 
-def test_excludes_runs_and_twin(project):
+def test_excludes_runs(project):
     project.new_run()  # creates runs/0001
-    project.twin_dir.mkdir(exist_ok=True)
-    (project.twin_dir / "big.bin").write_text("x" * 1000)
     cid = checkpoint.create(project)
     snap = project.root / checkpoint.CHECKPOINT_DIRNAME / cid
     assert not (snap / "runs").exists()
-    assert not (snap / "twin").exists()
     assert (snap / "workspace").exists()
 
 
@@ -43,7 +40,6 @@ def test_prune_keeps_only_max(project):
 
 # ---- integration through the agent loop --------------------------------------
 def test_run_checkpoints_before_mutation_and_revert_undoes_it(project, cfg):
-    cfg.set("plan_build_tasks", False)
     result = agent.run(
         project, "write a file", cfg,
         MockBackend([
@@ -68,7 +64,6 @@ def test_run_checkpoints_before_mutation_and_revert_undoes_it(project, cfg):
 
 
 def test_checkpoint_once_per_turn_not_per_call(project, cfg):
-    cfg.set("plan_build_tasks", False)
     # two mutating calls in ONE turn -> a single checkpoint
     agent.run(
         project, "write two", cfg,
@@ -86,7 +81,6 @@ def test_checkpoint_once_per_turn_not_per_call(project, cfg):
 
 def test_checkpointing_off_takes_no_snapshots(project, cfg):
     cfg.set("checkpointing", False)
-    cfg.set("plan_build_tasks", False)
     agent.run(
         project, "write a file", cfg,
         MockBackend([
@@ -100,7 +94,6 @@ def test_checkpointing_off_takes_no_snapshots(project, cfg):
 
 
 def test_non_mutating_run_takes_no_snapshot(project, cfg):
-    cfg.set("plan_build_tasks", False)
     agent.run(
         project, "just a note", cfg,
         MockBackend([

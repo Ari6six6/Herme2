@@ -83,7 +83,6 @@ def _patch_fetch(monkeypatch):
 
 def test_fetch_taints_next_turn_action(project, cfg, monkeypatch):
     _patch_fetch(monkeypatch)
-    cfg.set("plan_build_tasks", False)
     prompts = []
 
     def confirm(action, detail="", viewable=None):
@@ -108,7 +107,6 @@ def test_fetch_taints_next_turn_action(project, cfg, monkeypatch):
 
 def test_taint_clears_when_no_new_untrusted_input(project, cfg, monkeypatch):
     _patch_fetch(monkeypatch)
-    cfg.set("plan_build_tasks", False)
     prompts = []
 
     def confirm(action, detail="", viewable=None):
@@ -225,7 +223,6 @@ def test_http_allow_does_not_cover_unlisted_domain_or_method(project, cfg, monke
 
 def test_tainting_tool_own_turn_is_not_gated(project, cfg, monkeypatch):
     _patch_fetch(monkeypatch)
-    cfg.set("plan_build_tasks", False)
 
     def never(*a, **k):
         raise AssertionError("the fetch turn itself must not be gated")

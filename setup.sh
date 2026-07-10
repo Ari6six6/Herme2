@@ -508,7 +508,7 @@ if ! run_as_user 'case ":$PATH:" in *":$HOME/.local/bin:"*) exit 0;; *) exit 1;;
   run_as_user 'grep -q "HOME/.local/bin" "$HOME/.bashrc" 2>/dev/null || echo "export PATH=\"\$HOME/.local/bin:\$PATH\"" >> "$HOME/.bashrc"'
 fi
 
-# Let Hermes drive Docker (the twin) without sudo. Effective on next login.
+# Let Hermes drive Docker (the air-gapped exec sandbox) without sudo. Effective on next login.
 usermod -aG docker "$INVOKER" 2>/dev/null || warn "could not add $INVOKER to docker group"
 ok "hermes on PATH (~/.local/bin); $INVOKER added to docker group"
 
@@ -531,8 +531,8 @@ fi
 echo "    - Files: $WG_CONF_DEST, $KILLSWITCH_SH, $KILLSWITCH_ENV"
 echo "    - Killswitch + tunnel auto-start on reboot."
 echo
-echo "  ${c_ylw}Important:${c_rst} Hermes's own outbound (Vast.ai SSH tunnel/API, twin package"
-echo "  builds) only works while the VPN is UP — that's the killswitch doing its job."
+echo "  ${c_ylw}Important:${c_rst} Hermes's own outbound (Vast.ai SSH tunnel/API, sandbox"
+echo "  container pulls) only works while the VPN is UP — that's the killswitch doing its job."
 echo
 echo "  Next steps:"
 echo "    1. Log out and back in (activates the docker group + PATH)."

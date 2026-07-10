@@ -28,8 +28,6 @@ class FakeSandbox:
 
 
 def _run(project, cfg, script, sandbox):
-    cfg.set("plan_build_tasks", False)
-    cfg.set("referee_on_deadlock", False)
     return agent.run(project, "do it", cfg, MockBackend(script),
                      gpu=object(), sandbox=sandbox, env={},
                      confirm_fn=lambda *a, **k: True)

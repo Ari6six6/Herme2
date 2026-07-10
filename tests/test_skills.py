@@ -137,7 +137,6 @@ def test_skills_nudge_lets_agent_capture_a_skill(two_projects, cfg):
     a, _ = two_projects
     cfg.set("skills_enabled", True)
     cfg.set("skills_nudge", True)
-    cfg.set("plan_build_tasks", False)
     # A run that "figures something out": a tool error, then a fix, then finish.
     # After finish, the nudge pass writes a skill.
     script = [
@@ -166,7 +165,6 @@ def test_no_nudge_on_trivial_run(two_projects, cfg):
     a, _ = two_projects
     cfg.set("skills_enabled", True)
     cfg.set("skills_nudge", True)
-    cfg.set("plan_build_tasks", False)
     # A clean 2-turn run with no errors -> heuristic says no figuring-out.
     script = [
         {"tool": "write_note", "args": {"text": "all fine"}},

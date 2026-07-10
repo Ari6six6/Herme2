@@ -128,7 +128,6 @@ def test_agent_run_reconciles_then_packages_directives(project, cfg):
     from hermes import agent
     from hermes.llm import MockBackend
     cfg.set("directives_enabled", True)
-    cfg.set("plan_build_tasks", False)
     _seed_contradiction(project)
     script = [
         # 1) the reconcile side-call (plain, no tools)

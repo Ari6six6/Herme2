@@ -125,9 +125,6 @@ def build_system_prompt(project: Project, env: dict, cfg: Config | None = None) 
                 "gotchas. After a task that took real figuring-out, capture what you "
                 "learned with `write_skill` (or update an existing skill).\n\n" + idx
             )
-    phase = recon_build_block(project) or build_mode_block(project, env)
-    if phase:
-        system += "\n\n" + phase
     guidance = (env.get("model_tool_guidance") or "").strip()
     if guidance:
         # Model-specific tool-calling discipline. Empty for the baseline model,
@@ -137,68 +134,6 @@ def build_system_prompt(project: Project, env: dict, cfg: Config | None = None) 
     if persona:
         system += "\n\n## Persona\n\n" + persona
     return system
-
-
-def _stack_line(manifest: dict) -> str:
-    stack = manifest.get("stack") or {}
-    from hermes.twin.recon import StackReport
-    return StackReport(**stack).summary() if stack else "(not fingerprinted yet)"
-
-
-def recon_build_block(project: Project) -> str:
-    """When a twin exists but isn't sealed yet, this is the builder phase: the
-    agent's job is to reconstruct the target's real webserver into the twin and
-    seal it. Returns "" when there's no open twin."""
-    try:
-        twin = project.twin()
-    except Exception:
-        return ""
-    if not twin.exists() or twin.is_sealed():
-        return ""
-    manifest = twin.read_manifest()
-    return render(_template("recon_build.md"), {
-        "source": manifest.get("source", "(unknown)"),
-        "exchange_count": manifest.get("exchange_count", len(twin.exchanges())),
-        "stack": _stack_line(manifest),
-    })
-
-
-def build_mode_block(project: Project, env: dict | None = None) -> str:
-    """When a sealed twin exists, tell the agent plainly: it is building against a
-    faithful, SAFE copy of the target — a safe execution environment — not the
-    live system. This is what unlocks it to work freely without tripping the
-    don't-touch-live-servers reflex."""
-    try:
-        twin = project.twin()
-    except Exception:
-        return ""
-    if not twin.is_sealed():
-        return ""
-    env = env or {}
-    manifest = twin.read_manifest()
-    twin_url = f"http://127.0.0.1:{env.get('twin_port', 8900)}"
-    live_touch = env.get("build_live_touch", False)
-    network_note = (
-        "Live-touch tools (`twin_expand`, `twin_reground`) and general web access "
-        "are available this run, so you technically CAN reach the live target — "
-        "don't, unless the operator explicitly asked you to."
-        if live_touch else
-        "This run has NO path to the live target at all: no `http_request`, no "
-        "`web_search`, no `twin_expand`/`twin_reground` are even registered. "
-        "Everything reachable from here is the twin. If the twin is missing "
-        "something you need, say so in your summary — the operator grows it with "
-        "`run build`."
-    )
-    return render(_template("build_mode.md"), {
-        "source": manifest.get("source", "(unknown)"),
-        "exchange_count": manifest.get("exchange_count", 0),
-        "stack": _stack_line(manifest),
-        "mission": manifest.get("mission") or "(set the mission with `mission edit`)",
-        "win_condition": manifest.get("win_condition")
-        or "your solution is correct and behaves like the twin on every input you check",
-        "twin_url": twin_url,
-        "network_note": network_note,
-    })
 
 
 def assemble(project: Project, prompt: str, env: dict, cfg: Config) -> list[dict]:
@@ -321,95 +256,8 @@ def phantom_nudge() -> str:
     return _template("phantom.md").strip()
 
 
-def build_proof_nudge() -> str:
-    return _template("build_proof.md").strip()
-
-
 def verifier_prompt() -> str:
     return _template("verifier.md").strip()
-
-
-def antithesis_prompt() -> str:
-    return _template("antithesis.md").strip()
-
-
-def planner_prompt() -> str:
-    return _template("planner.md")
-
-
-def planner_request(project, request: str) -> str:
-    """The planner brief: mission + winning condition + the operator's request."""
-    manifest = {}
-    try:
-        manifest = project.twin().read_manifest()
-    except Exception:
-        pass
-    mission = manifest.get("mission") or "(no explicit mission set)"
-    win = manifest.get("win_condition") or "behave like the twin on every input checked"
-    return (
-        f"Mission: {mission}\n"
-        f"Winning condition: {win}\n\n"
-        "Operator request:\n"
-        f"{request.strip()}\n\n"
-        "Produce the execution checklist."
-    )
-
-
-def plan_brief(plan: str) -> str:
-    return (
-        "# PLAN (from the planner — execute against this, in order; the "
-        "antithesis will check each point)\n" + plan.strip()
-    )
-
-
-def referee_prompt() -> str:
-    return _template("referee.md")
-
-
-def referee_request(request: str, files: list[str], antithesis_report: str) -> str:
-    file_list = "\n".join(f"- {f}" for f in files) if files else "(none reported)"
-    return (
-        "The builder was asked:\n\n"
-        f"{request.strip()}\n\n"
-        "Files the builder wrote or changed:\n"
-        f"{file_list}\n\n"
-        "The antithesis's latest report (it says the solution does NOT pass):\n"
-        f"{(antithesis_report or '(no report)').strip()}\n\n"
-        "Investigate against the twin yourself and make the final, binding call."
-    )
-
-
-def referee_failed(reason: str) -> str:
-    return (
-        "A REFEREE was brought in because you and the independent checker kept "
-        "disagreeing, and with fresh eyes on the real sandbox it ruled against "
-        "the current solution:\n\n"
-        f"{reason.strip()}\n\n"
-        "This is the binding call. Fix the real problem it identified, verify it "
-        "yourself by running the code and the twin, and only then finish."
-    )
-
-
-def antithesis_request(project, request: str, files: list[str]) -> str:
-    """The antithesis brief: break this solution against the twin."""
-    file_list = "\n".join(f"- {f}" for f in files) if files else "(none reported)"
-    manifest = {}
-    try:
-        manifest = project.twin().read_manifest()
-    except Exception:
-        pass
-    mission = manifest.get("mission") or request.strip()
-    win = manifest.get("win_condition") or "(no explicit winning condition set)"
-    return (
-        "A build agent was asked:\n\n"
-        f"{request.strip()}\n\n"
-        f"Mission: {mission}\n"
-        f"Winning condition: {win}\n\n"
-        "It claims to have met the winning condition, writing/changing these files:\n"
-        f"{file_list}\n\n"
-        "Break it against the twin now: run the real solution and the twin on real "
-        "inputs, compare their actual outputs, then give your VERDICT."
-    )
 
 
 def verifier_request(request: str, files: list[str]) -> str:

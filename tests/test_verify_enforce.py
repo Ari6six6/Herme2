@@ -5,7 +5,6 @@ from hermes.llm import MockBackend
 
 
 def _run(project, cfg, script, gpu=None):
-    cfg.set("plan_build_tasks", False)
     cfg.set("verify_code_runs", False)  # isolate from the sandbox verifier
     return agent.run(project, "do it", cfg, MockBackend(script),
                      gpu=gpu, env={}, confirm_fn=lambda *a, **k: True)

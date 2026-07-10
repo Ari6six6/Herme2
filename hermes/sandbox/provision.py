@@ -34,10 +34,9 @@ _INSTALL_DOCKER = (
 
 def _require_usable(ep, runtime: str) -> None:
     """A *present* runtime is not a *usable* one. If the Hermes user can't reach the
-    daemon, `build serve` would otherwise die deep inside a reconstruction with a
-    cryptic 'permission denied ... docker.sock' — and the agent falls back to the
-    GPU box. Catch it here, at provision time, with the actual fix instead of a
-    guess."""
+    daemon, `sandbox_shell` would otherwise die deep inside a run with a cryptic
+    'permission denied ... docker.sock' — and the agent falls back to the GPU box.
+    Catch it here, at provision time, with the actual fix instead of a guess."""
     from hermes.sandbox import runtime_usable
 
     ok, detail = runtime_usable(ep, runtime)

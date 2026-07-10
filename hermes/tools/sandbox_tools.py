@@ -41,9 +41,9 @@ _NETWORK_HINT = (
     "\n\nNOTE: that failure pattern means the command tried to reach the "
     "network. This container is `--network none` — no route out exists, ever; "
     "this will not succeed on retry and it is not slow, it never connects. "
-    "Anything needing installs/downloads has to happen in the twin build "
-    "container (`build_run`) before the twin is sealed — it's too late for that "
-    "here."
+    "Anything needing installs/downloads has to happen on a networked box (the "
+    "GPU box via `remote_shell`, or a registered host) and then be moved in with "
+    "`transfer`/`replicate` — it can't happen from inside this container."
 )
 
 

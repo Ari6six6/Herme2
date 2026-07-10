@@ -34,15 +34,9 @@ DEFAULTS: dict = {
                                 # returns a partial result instead of hanging.
     "stall_nudges": 2,  # bounce prose-only turns back N times before accepting them as final
     "phantom_nudges": 1,  # bounce a finish that pasted code but wrote/ran nothing
-    "build_proof_nudges": 1,  # in build mode, bounce a finish that never checked the twin
     "verify_code_runs": True,  # after a code task, an independent pass re-runs it in the sandbox
     "verify_rounds": 2,  # how many times that pass may bounce a failed run back
-    "verify_max_turns": 6,  # tool-call budget inside one verification/referee pass
-    "plan_build_tasks": True,  # build mode: a planner lays out a checklist before building
-    "referee_on_deadlock": True,  # build mode: a referee breaks a builder/antithesis deadlock
-    "build_live_touch": False,  # sealed build mode: False cuts off ALL live-target reach (no web
-                                 # tools, no twin_expand/twin_reground) so `run` can only ever hit
-                                 # the twin; set True to re-allow those narrowly-scoped live reads
+    "verify_max_turns": 6,  # tool-call budget inside one verification pass
     "max_tool_result_chars": 8000,
     "package_budget_tokens": 10000,  # scaled down automatically on small contexts
     "history_max_prompts": 30,
@@ -89,12 +83,6 @@ DEFAULTS: dict = {
     "gpu_shell": False,  # False: GPU box is the model's host only; code runs in the air-gapped sandbox. True: also expose remote_shell/read/write for on-card compute
     "allow_gpu_network": False,  # only relevant when gpu_shell is on. False: box may install/build (net), but raw egress + target traffic go via the VPS; True: unrestricted box net
     "sandbox_image": "python:3.12-slim",  # base image for the air-gapped exec container (sandbox_shell)
-    "twin_clone_max": 200,  # max requests recording a target's responses makes
-    "twin_clone_delay": 0.5,  # polite seconds between reads while recording
-    "twin_clone_depth": 0,  # 0 = fingerprint only (no page crawl); >0 follows links
-    "twin_port": 8900,  # localhost port the runtime twin container publishes on
-    "twin_base_image": "ubuntu:22.04",  # base image the container twin boots from before the recipe
-    "twin_serve_step_timeout": 1800,  # per-recipe-step timeout when respinning from the blueprint
     # Operator-configured HTTP auto-approval (see hermes/http_policy.py): a list
     # of {"domain": "api.example.com", "methods": ["GET", "POST"]} objects that
     # skip confirmation entirely, in any turn (tainted or not). Manage with the

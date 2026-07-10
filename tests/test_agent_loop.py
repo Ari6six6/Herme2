@@ -5,10 +5,6 @@ from hermes.llm import MockBackend
 
 
 def run_agent(project, cfg, script, confirm=None, gpu=None, sandbox=None):
-    # The planner/referee are exercised in test_planner_referee; keep these
-    # loop-mechanics tests free of the extra build-mode passes.
-    cfg.set("plan_build_tasks", False)
-    cfg.set("referee_on_deadlock", False)
     backend = MockBackend(script)
     return agent.run(
         project,
@@ -391,74 +387,6 @@ def test_no_verification_for_non_code_runs(project, cfg):
     assert result.summary == "checked, all good"
     transcript = (project.runs_dir / "0001" / "transcript.jsonl").read_text()
     assert "verifier" not in transcript
-
-
-def _seal_twin(project):
-    from hermes.twin.model import Exchange
-    twin = project.twin()
-    twin.init(source="https://example.com", mission="reimpl", win_condition="match")
-    twin.add_exchange(Exchange(method="GET", path="/ping", status=200,
-                               response_body="pong", content_type="text/plain"))
-    twin.seal()
-
-
-def test_build_proof_gate_bounces_finish_without_twin_check(project, cfg):
-    # Build mode: changed code, declared done, never queried the twin -> bounced.
-    _seal_twin(project)
-    result = run_agent(
-        project,
-        cfg,
-        [
-            {"tool": "write_file",
-             "args": {"path": "workspace/app.py", "content": "print('pong')"}},
-            {"tool": "finish_run", "args": {"summary": "it works, trust me"}},
-            # bounced -> now it actually checks against the twin, then finishes
-            {"tool": "twin_request", "args": {"path": "/ping"}},
-            {"tool": "finish_run", "args": {"summary": "proved: my output == twin's"}},
-        ],
-        gpu=None,  # isolate the build-proof gate from the sandbox verifier
-    )
-    assert not result.aborted
-    assert result.summary == "proved: my output == twin's"
-    transcript = (project.runs_dir / "0001" / "transcript.jsonl").read_text()
-    assert "you do not get to make" in transcript  # the gate's nudge landed
-
-
-def test_build_proof_gate_passes_when_twin_queried(project, cfg):
-    _seal_twin(project)
-    result = run_agent(
-        project,
-        cfg,
-        [
-            {"tool": "write_file",
-             "args": {"path": "workspace/app.py", "content": "print('pong')"}},
-            {"tool": "twin_request", "args": {"path": "/ping"}},
-            {"tool": "finish_run", "args": {"summary": "checked against twin"}},
-        ],
-        gpu=None,
-    )
-    assert not result.aborted
-    assert result.summary == "checked against twin"
-    assert result.turns == 3  # not bounced
-    transcript = (project.runs_dir / "0001" / "transcript.jsonl").read_text()
-    assert "you do not get to make" not in transcript
-
-
-def test_build_proof_gate_inactive_without_sealed_twin(project, cfg):
-    # An open twin is still the recon phase — no build-proof gate.
-    project.twin().init(source="https://example.com")
-    result = run_agent(
-        project,
-        cfg,
-        [
-            {"tool": "write_file",
-             "args": {"path": "workspace/app.py", "content": "x=1"}},
-            {"tool": "finish_run", "args": {"summary": "done"}},
-        ],
-        gpu=None,
-    )
-    assert not result.aborted
-    assert result.turns == 2  # finished without a bounce
 
 
 def test_think_blocks_stripped():
